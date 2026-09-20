@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hadith Search</title>
+<style>
+  :root{
+    --bg:#fbfaf7; --card:#fff; --ink:#1c1b18; --muted:#6b675e;
+    --line:#e6e2d9; --accent:#1f6f54; --accent-soft:#eaf3ef;
+    --warn:#8a6d3b; --warn-soft:#fdf6e6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#16161a; --card:#1e1e23; --ink:#ece9e3; --muted:#a09b91;
+           --line:#2e2e35; --accent:#6ecfa8; --accent-soft:#1b2f28;
+           --warn:#d8b25f; --warn-soft:#2a2418; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:16px/1.65 ui-serif,Georgia,"Times New Roman",serif;}
+  .wrap{max-width:760px;margin:0 auto;padding:32px 20px 80px}
+  header{text-align:center;margin-bottom:28px}
+  h1{font-size:28px;margin:0 0 6px;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:14px;margin:0}
+  form{display:flex;gap:8px;margin:24px 0 8px}
+  input[type=text]{flex:1;padding:14px 16px;font-size:16px;font-family:inherit;
+    border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+  input[type=text]:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+  button{padding:14px 20px;font-size:15px;font-family:inherit;border:0;border-radius:10px;
+    background:var(--accent);color:#fff;cursor:pointer}
+  button:disabled{opacity:.55;cursor:default}
+  .examples{font-size:13px;color:var(--muted);margin-bottom:22px}
+  .examples button{background:none;border:0;color:var(--accent);padding:0 4px;
+    font-size:13px;cursor:pointer;text-decoration:underline;font-family:inherit}
+  .notice{background:var(--warn-soft);border:1px solid var(--line);border-left:3px solid var(--warn);
+    border-radius:8px;padding:12px 14px;font-size:13.5px;color:var(--ink);margin-bottom:22px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:18px 20px;margin-bottom:14px}
+  .cite{font-size:13px;color:var(--accent);font-weight:600;margin-bottom:8px;font-family:system-ui,sans-serif}
+  .narr{font-size:13.5px;color:var(--muted);margin-bottom:6px}
+  .text{white-space:pre-wrap}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+    margin-top:14px;padding-top:12px;border-top:1px solid var(--line);
+    font-size:12px;color:var(--muted);font-family:system-ui,sans-serif}
+  .badge{padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent)}
+  .badge.single{background:var(--warn-soft);color:var(--warn)}
+  .report{margin-left:auto;background:none;border:1px solid var(--line);color:var(--muted);
+    padding:5px 11px;font-size:12px;border-radius:99px;font-family:system-ui,sans-serif}
+  .report:hover{border-color:var(--warn);color:var(--warn)}
+  .fb{margin-top:12px;padding:14px;border:1px dashed var(--line);border-radius:10px;
+    font-family:system-ui,sans-serif;font-size:13.5px}
+  .fb p{margin:0 0 10px;font-weight:600}
+  .fb label{display:block;margin:6px 0;cursor:pointer;font-weight:400}
+  .fb textarea{width:100%;margin-top:8px;padding:9px;border:1px solid var(--line);
+    border-radius:8px;font:inherit;background:var(--bg);color:var(--ink);resize:vertical}
+  .fb .row{display:flex;gap:8px;margin-top:10px}
+  .fb .cancel{background:none;border:1px solid var(--line);color:var(--muted)}
+  .empty{text-align:center;padding:36px 20px;color:var(--muted)}
+  .status{text-align:center;color:var(--muted);padding:24px;font-size:14px}
+  .thanks{color:var(--accent);font-size:13px;margin-top:10px;font-family:system-ui,sans-serif}
+  footer{margin-top:48px;text-align:center;font-size:12.5px;color:var(--muted);
+    font-family:system-ui,sans-serif;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Hadith Search</h1>
+    <p class="sub">Ask a question in your own words. Answers come only from Sahih al-Bukhari and Sahih Muslim.</p>
+  </header>
+
+  <div class="notice">
+    <strong>This is an early trial.</strong> Some answers will be wrong or incomplete.
+    If something looks wrong, please press <em>Report</em> on it and tell us why — that is
+    how we fix it. Nothing here replaces asking a qualified scholar.
+  </div>
+
+  <form id="f">
+    <input type="text" id="q" placeholder="e.g. how should I treat my parents"
+           autocomplete="off" autofocus>
+    <button type="submit" id="go">Search</button>
+  </form>
+  <div class="examples">Try:
+    <button type="button" data-q="how should I treat my parents">treating parents</button>·
+    <button type="button" data-q="is it okay to be angry">anger</button>·
+    <button type="button" data-q="what is the best time to pray Tahajjud">Tahajjud timing</button>·
+    <button type="button" data-q="what does Islam say about lying">lying</button>
+  </div>
+
+  <div id="out"></div>
+
+  <footer>
+    Sahih al-Bukhari and Sahih Muslim · every result links to its reference so you can verify it<br>
+    Not a substitute for scholarly guidance.
+  </footer>
+</div>
+
+<script>
+const REASONS = [
+  ["unrelated",  "This hadith has nothing to do with my question"],
+  ["partial",    "Related, but it does not answer what I asked"],
+  ["better",     "There is a better-known hadith for this"],
+  ["wording",    "The text or translation looks wrong"],
+  ["other",      "Something else"]
+];
+const out = document.getElementById('out');
+const qEl = document.getElementById('q');
+const go  = document.getElementById('go');
+let lastQuestion = '';
+
+function esc(s){ return (s||'').replace(/[&<>"]/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+document.querySelectorAll('.examples button').forEach(b =>
+  b.onclick = () => { qEl.value = b.dataset.q; document.getElementById('f')
+    .dispatchEvent(new Event('submit',{cancelable:true})); });
+
+document.getElementById('f').onsubmit = async (e) => {
+  e.preventDefault();
+  const question = qEl.value.trim();
+  if(!question) return;
+  lastQuestion = question;
+  go.disabled = true;
+  out.innerHTML = '<div class="status">Searching…</div>';
+  try{
+    const r = await fetch('/api/search', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({question})
+    });
+    if(!r.ok){ const err = await r.json().catch(()=>({}));
+      throw new Error(err.detail || 'Something went wrong.'); }
+    render(await r.json());
+  }catch(err){
+    out.innerHTML = '<div class="status">'+esc(err.message)+'</div>';
+  }finally{ go.disabled = false; }
+};
+
+function render(data){
+  if(!data.results.length){
+    out.innerHTML = '<div class="empty"><p><strong>No clear answer found.</strong></p>'+
+      '<p>Try rephrasing it, or asking about something more specific.<br>'+
+      'Check the spelling of any Arabic words too.</p></div>';
+    return;
+  }
+  out.innerHTML = data.results.map((h,i) => `
+    <div class="card" data-id="${esc(h.id)}">
+      <div class="cite">${esc(h.citation)}</div>
+      ${h.narrator ? `<div class="narr">Narrated ${esc(h.narrator)}</div>` : ''}
+      <div class="text">${esc(h.text)}</div>
+      <div class="meta">
+        <span class="badge ${h.cross_checked ? '' : 'single'}">
+          ${h.cross_checked ? 'Checked against a second source' : 'Single source'}
+        </span>
+        <button class="report" data-i="${i}">Report</button>
+      </div>
+      <div class="fbslot"></div>
+    </div>`).join('');
+
+  out.querySelectorAll('.report').forEach(btn => btn.onclick = () => {
+    const card = btn.closest('.card');
+    const slot = card.querySelector('.fbslot');
+    if(slot.innerHTML){ slot.innerHTML=''; return; }
+    slot.innerHTML = `
+      <div class="fb">
+        <p>What is wrong with this one?</p>
+        ${REASONS.map(([v,l],n)=>`<label>
+          <input type="radio" name="r-${esc(card.dataset.id)}" value="${v}" ${n===0?'checked':''}>
+          ${esc(l)}</label>`).join('')}
+        <textarea rows="2" placeholder="Anything else we should know (optional)"></textarea>
+        <div class="row">
+          <button class="send">Send report</button>
+          <button class="cancel">Cancel</button>
+        </div>
+      </div>`;
+    slot.querySelector('.cancel').onclick = () => slot.innerHTML='';
+    slot.querySelector('.send').onclick = async () => {
+      const reason = slot.querySelector('input[type=radio]:checked').value;
+      const detail = slot.querySelector('textarea').value;
+      slot.querySelector('.send').disabled = true;
+      try{
+        await fetch('/api/feedback',{method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({question:lastQuestion, hadith_id:card.dataset.id,
+                                reason, detail})});
+        slot.innerHTML = '<div class="thanks">Thank you — this has been recorded '+
+                         'and will be looked at.</div>';
+      }catch(e){
+        slot.innerHTML = '<div class="thanks">Could not send that. Please try again.</div>';
+      }
+    };
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+# ---- SECRETS — never commit ----
+.env
+
+# ---- Large rebuildable artefacts ----
+# Embeddings (176 MB). Rebuilt automatically on first run, ~4 minutes.
+data/cache/
+
+# Downloaded source data (9 MB). Re-downloaded automatically by load_structured.py.
+data/raw/
+
+# Assembled corpus files (20 MB). Rebuilt by build_corpus.py / align_sources.py.
+data/corpus.json
+data/bukhari_verified.json
+data/cross_check_report.json
+
+# Assembled duplicate of progress_*.jsonl, which IS committed.
+data/doc2query/full_*.json
+
+# Runtime data: what users report. Not source code.
+data/feedback.jsonl
+
+# The source PDF (5.8 MB). Freely downloadable — see README.
+Sahih_Bukhari.pdf
+
+# ---- Python ----
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# macOS
+.DS_Store
