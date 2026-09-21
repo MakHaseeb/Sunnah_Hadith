@@ -24,6 +24,29 @@ The known-answer checks are the important ones. A site can be up, fast and
 completely wrong -- that is exactly the failure this project kept hitting,
 and it is invisible to an ordinary uptime monitor.
 
+TWO MODES, BECAUSE THE CHECKS HAVE VERY DIFFERENT COSTS
+-------------------------------------------------------
+Every check that performs a SEARCH costs a relevance-check call. Running
+all of them hourly comes to about $7 a month -- more than the one-off
+corpus build, every month, on a site with nobody using it.
+
+So the checks are split by what they cost:
+
+  --quick  (default)  free. Is the site up, is the corpus loaded, does the
+                      daily hadith resolve, is the relevance check still
+                      switched on. Catches crashes, failed deploys, a
+                      corpus that did not load, and lost API credit. Run
+                      this hourly.
+
+  --full              ~$0.01 a run. Everything above plus the known-answer
+                      and rejection checks, which are the only way to catch
+                      answers quietly getting worse. Run once or twice a
+                      day.
+
+Checking whether the relevance check is ENABLED is free -- that is read
+from config, not by asking the model. So the hourly run still catches the
+most likely real failure, which is running out of credit.
+
 EXIT CODE
 ---------
 0 = healthy, 1 = something failed. That makes it usable from cron, a CI
@@ -72,7 +95,7 @@ def _post(base, path, payload, timeout=120):
         return json.loads(r.read())
 
 
-def run(base=DEFAULT_BASE, verbose=True):
+def run(base=DEFAULT_BASE, verbose=True, full=False):
     failures, notes = [], []
 
     def check(name, ok, detail=""):
@@ -91,11 +114,14 @@ def run(base=DEFAULT_BASE, verbose=True):
         check("reachable", False, f"{type(e).__name__}: {e}")
         return failures, notes           # nothing else can be tested
 
-    # relevance check switched on
+    # Is the relevance check configured? Read from config, not by asking the
+    # model, so this costs nothing and still catches the likeliest failure:
+    # credit running out.
     try:
-        d = _post(base, "/api/search", {"question": "is it okay to be angry"})
-        check("relevance check", d.get("checked") is True,
-              "on" if d.get("checked") else "OFF — answers will be much worse")
+        d = _get(base, "/api/health")
+        on = d.get("relevance_check") is True
+        check("relevance check", on,
+              "on" if on else "OFF — answers will be much worse")
     except Exception as e:
         check("relevance check", False, f"{type(e).__name__}: {e}")
 
@@ -116,7 +142,11 @@ def run(base=DEFAULT_BASE, verbose=True):
     except Exception as e:
         check("topics loaded", False, f"{type(e).__name__}: {e}")
 
-    # known answers — the checks that matter
+    if not full:
+        return failures, notes       # everything past here costs money
+
+    # known answers — the checks that matter, and the only ones that can
+    # catch answers quietly getting worse
     for question, acceptable in KNOWN:
         try:
             d = _post(base, "/api/search", {"question": question})
@@ -145,10 +175,13 @@ if __name__ == "__main__":
     ap.add_argument("--base", default=DEFAULT_BASE)
     ap.add_argument("--quiet", action="store_true",
                     help="print only on failure — the right mode for cron")
+    ap.add_argument("--full", action="store_true",
+                    help="also verify known answers (~$0.01 a run). Without "
+                         "this only the free checks run.")
     args = ap.parse_args()
 
     started = time.strftime("%Y-%m-%d %H:%M:%S")
-    failures, notes = run(args.base, verbose=not args.quiet)
+    failures, notes = run(args.base, verbose=not args.quiet, full=args.full)
 
     if failures:
         print(f"\n!! {started} — {len(failures)} CHECK(S) FAILED at {args.base}")
@@ -157,5 +190,6 @@ if __name__ == "__main__":
         sys.exit(1)
 
     if not args.quiet:
-        print(f"\n  all {len(notes)} checks passed at {started}")
+        mode = "full" if args.full else "quick (free)"
+        print(f"\n  all {len(notes)} checks passed at {started} — {mode}")
     sys.exit(0)

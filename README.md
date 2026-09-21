@@ -125,14 +125,26 @@ happened".
 answers to, and fails loudly if they change:
 
 ```bash
-python3 healthcheck.py --quiet        # prints only on failure
+python3 healthcheck.py --quiet          # free — run hourly
+python3 healthcheck.py --quiet --full   # ~$0.01 — run once or twice a day
 ```
 
-It checks the site responds, the corpus is loaded, the relevance check is
-switched on, the daily hadith resolves, four known questions still return
-the right hadith, and obvious nonsense is still refused. Exit code 0 means
-healthy, 1 means something failed — so it works from cron or any alerting
-tool without parsing output.
+**Two modes, because the checks cost very differently.** Every check that
+performs a *search* costs a relevance-check call. Running them all hourly
+comes to about **$7 a month** — more than the one-off corpus build, every
+month, on a site with no users.
+
+| mode | costs | checks |
+|---|---|---|
+| `--quick` (default) | **free** | site responds, corpus loaded, daily hadith resolves, relevance check still switched on |
+| `--full` | ~$0.01 a run | all of the above, plus four known questions returning the right hadith and two nonsense queries still refused |
+
+Checking whether the relevance check is *enabled* is free — it is read from
+config, not by asking the model. So the hourly run still catches the most
+likely real failure, which is running out of API credit.
+
+Exit code 0 means healthy, 1 means something failed — so it works from cron
+or any alerting tool without parsing output.
 
 The known-answer checks are the point. **A site can be up, fast and
 completely wrong** — that is exactly the failure this project kept hitting,
@@ -141,7 +153,10 @@ and an ordinary uptime monitor cannot see it.
 Run it hourly:
 
 ```
-0 * * * * cd /path/to/app && python3 healthcheck.py --quiet --base https://yoursite || echo "hadith app check failed"
+# hourly, free
+0 * * * * cd /path/to/app && python3 healthcheck.py --quiet --base https://yoursite || echo "hadith app DOWN"
+# twice a day, ~$0.60/month, catches answers quietly getting worse
+0 6,18 * * * cd /path/to/app && python3 healthcheck.py --quiet --full --base https://yoursite || echo "hadith app ANSWERS WRONG"
 ```
 
 ## Reporting a wrong answer

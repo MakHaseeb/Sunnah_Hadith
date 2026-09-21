@@ -198,6 +198,22 @@ def auth_config():
     }
 
 
+@app.get("/api/health")
+def health():
+    """Cheap status, read from memory and config. Calls no model, so a
+    monitor can poll it as often as it likes for nothing."""
+    store = STATE.get("store")
+    return {
+        "ok": store is not None,
+        "hadith": len(store.hadiths) if store else 0,
+        "chunks": len(store.chunks) if store else 0,
+        "expansions": len(getattr(store, "expansions", {}) or {}) if store else 0,
+        "relevance_check": STATE.get("client") is not None,
+        "sign_in": google_auth.configured(),
+        "support_link": bool(SUPPORT_URL),
+    }
+
+
 @app.get("/api/topics")
 def list_topics():
     """Everyday subjects people can browse. Free -- no AI call."""
