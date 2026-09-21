@@ -6,7 +6,7 @@ colorTo: yellow
 sdk: docker
 app_port: 7860
 pinned: false
-short_description: Ask a question in plain English, get the hadith that answer it
+short_description: Search Bukhari and Muslim in plain English
 ---
 
 # Hadith Search
