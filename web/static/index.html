@@ -671,13 +671,25 @@ function render(data){
     return;
   }
   shownIds=data.results.map(h=>h.id);
-  const warn = data.degraded
-    ? `<div class="status glass" style="text-align:left;padding:13px 17px;font-size:15px">
-         <strong>Showing unchecked results.</strong> The step that works out
-         which hadith actually answer your question is unavailable right now,
-         so these are the closest matches by wording alone — some may not be
-         relevant. Please read the citations carefully.
-       </div>` : '';
+  // Three different situations, three different explanations. Telling
+  // someone "unavailable" when they have simply used their allowance would
+  // be misleading, and saying nothing at all would be worse.
+  let warnText = '';
+  if(data.capped === 'visitor')
+    warnText = `<strong>You have used today's checked searches.</strong>
+      These are the closest matches by wording alone — some may not be
+      relevant. Your full allowance returns tomorrow.`;
+  else if(data.capped === 'site')
+    warnText = `<strong>The site has used today's allowance.</strong> To keep
+      this free, checked searches are limited each day. These are the closest
+      matches by wording alone — please read the citations carefully.`;
+  else if(data.degraded)
+    warnText = `<strong>Showing unchecked results.</strong> The step that
+      works out which hadith actually answer your question is unavailable
+      right now, so these are the closest matches by wording alone.`;
+  const warn = warnText
+    ? `<div class="status glass" style="text-align:left;padding:13px 17px;font-size:15px">${warnText}</div>`
+    : '';
   out.innerHTML = warn + data.results.map((h,i)=>cardHTML(h,i)).join('');
   wireCards();
 }

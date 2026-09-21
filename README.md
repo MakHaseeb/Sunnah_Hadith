@@ -203,6 +203,32 @@ Optional second-source cross-check: put `Sahih_Bukhari.pdf` (from
 islamhouse.com) in this folder, install `poppler`, and run
 `python3 align_sources.py` before `build_corpus.py`.
 
+## Usage caps
+
+Two limits, because one is not enough:
+
+```bash
+export HADITH_DAILY_CAP=2000     # paid searches per day, whole site
+export HADITH_VISITOR_CAP=40     # paid searches per day, per visitor
+```
+
+**Per visitor** stops ordinary overuse — a stuck page, someone hammering the
+box, a careless script. It is keyed on the token the browser makes for
+itself, so clearing site data resets it. That is a known weakness and it is
+fine: this exists to prevent accidents, not to stop a determined person.
+
+**Whole site** is the real protection and cannot be bypassed, because it
+counts what the *server* spent, not what a visitor claims. At the default
+2,000 a day (~$2.80) your bill has a hard ceiling of about **$84/month** no
+matter what happens.
+
+**Hitting a cap does not turn anyone away.** Search, topic browsing and the
+daily hadith are free and local, so the site keeps working — it just skips
+the paid relevance step and says so plainly. Refusing people would protect
+the bill and destroy the site.
+
+Today's usage is at `/api/usage`.
+
 ## What it costs to run
 
 Search runs locally and is free. The relevance check costs about

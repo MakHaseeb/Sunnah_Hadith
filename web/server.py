@@ -46,6 +46,7 @@ from hybrid_retrieve import HybridStore                        # noqa: E402
 from daily_hadith import hadith_for, SUPPORT_HADITH_ID          # noqa: E402
 import analytics                                                # noqa: E402
 import google_auth                                              # noqa: E402
+import usage_cap                                                # noqa: E402
 import topics as topics_mod                                     # noqa: E402
 
 FEEDBACK_PATH = os.path.join(PROJECT_DIR, "data", "feedback.jsonl")
@@ -136,6 +137,14 @@ def search(req: SearchRequest):
 
     client = STATE.get("client")
     degraded = False
+    capped = None
+
+    # Has this search been allowed a paid relevance check today?
+    if client:
+        ok, why = usage_cap.allow(req.visitor or "")
+        if not ok:
+            capped = why
+            client = None        # fall through to the free path below
 
     if not client:
         chosen = [(item, None) for item in retrieved[:MAX_SHOWN]]
@@ -144,6 +153,7 @@ def search(req: SearchRequest):
         try:
             keep, verdicts, _usage = filter_relevant(
                 question, retrieved, client=client, k=SHORTLIST)
+            usage_cap.record(req.visitor or "")   # only count what actually ran
             keep_ids = {id(k) for k in keep}
             chosen = [(item, v) for item, v in zip(retrieved, verdicts)
                       if id(item) in keep_ids]
@@ -167,7 +177,11 @@ def search(req: SearchRequest):
         "results": [_payload(item[0], item[4], (v or {}).get("why"))
                     for item, v in chosen],
         "checked": bool(client) and not degraded,
+        # `degraded` means the check could not run (no credit, outage);
+        # `capped` means it was deliberately skipped to stay inside budget.
+        # Different causes, different wording for the user.
         "degraded": degraded,
+        "capped": capped,
     }
 
 
@@ -180,6 +194,12 @@ class EventRequest(BaseModel):
 def event(req: EventRequest):
     ok = analytics.record(req.event, req.visitor)
     return {"ok": ok}
+
+
+@app.get("/api/usage")
+def usage():
+    """Today's spend against the cap. For the site owner."""
+    return usage_cap.status()
 
 
 @app.get("/api/stats")
@@ -209,6 +229,7 @@ def health():
         "chunks": len(store.chunks) if store else 0,
         "expansions": len(getattr(store, "expansions", {}) or {}) if store else 0,
         "relevance_check": STATE.get("client") is not None,
+        "usage": usage_cap.status(),
         "sign_in": google_auth.configured(),
         "support_link": bool(SUPPORT_URL),
     }
