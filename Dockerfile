@@ -6,6 +6,9 @@
 # its first visitor immediately instead of making them wait.
 FROM python:3.11-slim
 
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Torch pulls ~2GB of CUDA libraries by default and none of it is usable on a
 # CPU-only Space. The CPU wheel is a fraction of the size and identical for
 # our purposes, which keeps the image small enough to build quickly.
@@ -23,6 +26,17 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+
+# Hugging Face rejects binary files in a normal git push, and the background
+# photograph is the only binary in the project. Rather than require Git LFS
+# just for one image, the deploy strips it from the push and the container
+# fetches it from the public GitHub repo during the build. If the download
+# ever fails the page still works -- the CSS falls back to a plain dark
+# background -- so this cannot break the site.
+ARG BG_URL=https://raw.githubusercontent.com/MakHaseeb/Sunnah_Hadith/main/web/static/bg-photo.jpg
+RUN curl -fsSL --retry 3 -o web/static/bg-photo.jpg "$BG_URL" \
+      && echo "background image fetched" \
+      || echo "background image unavailable — page falls back to plain dark"
 
 # Fetch the collections, assemble the corpus, download the embedding model
 # and build the index -- all now, so none of it happens while someone waits.

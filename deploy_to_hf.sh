@@ -53,7 +53,17 @@ echo "==> swapping in the Space README"
 cp README.md README_GITHUB.md
 cp README_SPACE.md README.md
 git add README.md README_GITHUB.md
-git commit -q -m "Space metadata header for Hugging Face"
+
+# Hugging Face refuses binary files in a plain git push and wants Git LFS
+# for them. Rather than require an extra tool for a single image, the photo
+# is left out of the push entirely -- the Dockerfile fetches it from the
+# public GitHub repo while building.
+echo "==> removing the background image (fetched at build time instead)"
+git rm -q --cached web/static/bg-photo.jpg 2>/dev/null || true
+echo "web/static/bg-photo.jpg" >> .gitignore
+git add .gitignore
+
+git commit -q -m "Space metadata header; background fetched during build"
 
 echo "==> pushing to https://huggingface.co/spaces/$SPACE"
 echo
