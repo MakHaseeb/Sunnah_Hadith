@@ -24,6 +24,21 @@ scored **0.511** while the unrelated query "recipe for chicken biryani"
 scored **0.527** — the right answer scored *lower* than nonsense. No cut-off
 can separate those. Asking the question directly can, and does.
 
+## Browsing by topic
+
+A sidebar offers 22 everyday subjects — Prayer, Fasting, Good Manners,
+Marriage, Trade — covering 6,455 hadith across both collections.
+
+Browsing is **free and instant**: it reads from memory and makes no AI call,
+unlike a search. Results are shortest-first, so you start with hadith that
+can be read at a glance.
+
+The list is curated rather than showing all 154 books, because the largest
+books are not what an ordinary visitor wants — "Military Expeditions" has
+487 hadith and is rarely what someone came to ask about. Each topic gathers
+matching books from both collections, since Bukhari and Muslim name the
+same subject differently.
+
 ## Hadith of the day
 
 The homepage shows one well-known hadith, chosen by the date so everyone

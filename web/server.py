@@ -46,6 +46,7 @@ from hybrid_retrieve import HybridStore                        # noqa: E402
 from daily_hadith import hadith_for, SUPPORT_HADITH_ID          # noqa: E402
 import analytics                                                # noqa: E402
 import google_auth                                              # noqa: E402
+import topics as topics_mod                                     # noqa: E402
 
 FEEDBACK_PATH = os.path.join(PROJECT_DIR, "data", "feedback.jsonl")
 SHORTLIST = 10
@@ -69,6 +70,7 @@ def startup():
     with open(os.path.join(PROJECT_DIR, "data", "corpus.json")) as f:
         corpus = json.load(f)
     STATE["store"] = HybridStore(corpus, expansions=load_expansions())
+    STATE["topics"] = topics_mod.build_index(STATE["store"].hadiths)
     STATE["client"] = None
     if USE_RELEVANCE_CHECK:
         try:
@@ -175,6 +177,29 @@ def auth_config():
         "enabled": google_auth.configured(),
         "client_id": google_auth.client_id() or None,
         "required_for": ["feedback"],
+    }
+
+
+@app.get("/api/topics")
+def list_topics():
+    """Everyday subjects people can browse. Free -- no AI call."""
+    return {"topics": topics_mod.listing(STATE["topics"])}
+
+
+@app.get("/api/topic")
+def topic(name: str, limit: int = 8, offset: int = 0):
+    """Hadith within one topic. Shortest first, so browsing starts with
+    the ones that can be read at a glance rather than a wall of text."""
+    hits = STATE["topics"].get(name)
+    if hits is None:
+        raise HTTPException(status_code=404, detail="Unknown topic.")
+    ordered = sorted(hits, key=lambda h: len(h["text"].split()))
+    window = ordered[offset:offset + max(1, min(limit, 20))]
+    return {
+        "name": name,
+        "total": len(hits),
+        "offset": offset,
+        "results": [_payload(h, 1.0) for h in window],
     }
 
 
