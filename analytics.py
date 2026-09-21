@@ -42,7 +42,8 @@ ALLOWED = {
     "no_answer",    # the search found nothing confident
     "feedback",     # someone reported a result or sent a note
     "support_open", # someone opened the support panel
-    "support_click" # someone clicked through to the payment page
+    "support_click",# someone clicked through to the payment page
+    "signin",       # someone signed in with Google
 }
 
 

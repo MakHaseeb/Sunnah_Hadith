@@ -90,6 +90,10 @@ class SearchRequest(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
+    # What the user was actually looking at. Sent by the page so the report
+    # is self-explanatory later -- nobody can be expected to remember which
+    # hadith they were shown by the time they open a feedback form.
+    shown_ids: Optional[list] = None
     # hadith_id is optional: the same endpoint takes both "this result is
     # wrong" reports and general feedback about the site, so there is one
     # place to read everything people tell us.
@@ -246,6 +250,7 @@ def feedback(req: FeedbackRequest):
         "question": (req.question or "")[:500],
         "hadith_id": (req.hadith_id or "")[:64],
         "kind": "result" if req.hadith_id else "general",
+        "shown": (req.shown_ids or [])[:5],
         # An opaque token, not a name or an email. Enough to spot one person
         # sending fifty reports; not enough to know who they are.
         "by": user,

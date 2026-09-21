@@ -277,6 +277,15 @@
     color:#fff;font-weight:600;text-decoration:none;
     background:linear-gradient(180deg,#9a6a28,#6b461a);
     box-shadow:0 4px 16px rgba(138,95,40,.42)}
+  .opts{display:flex;flex-direction:column;gap:6px;margin:0 0 12px}
+  .opt{text-align:left;padding:10px 13px;border-radius:10px;
+    border:1px solid var(--glass-line);background:rgba(0,0,0,.18);
+    color:var(--ink);font-family:'Inter',system-ui,sans-serif;font-size:13.5px;
+    cursor:pointer;transition:all .18s ease}
+  .opt:hover{border-color:var(--accent-ink);transform:translateX(2px)}
+  .opt.on{background:rgba(184,130,60,.22);border-color:var(--accent-ink);
+    color:var(--accent-ink);font-weight:500}
+  .panel .send:disabled{opacity:.45;cursor:default}
   .panel .note{color:var(--muted);font-size:12.5px;margin-top:12px;line-height:1.6}
   .signin-slot{margin:14px 0 4px}
   .signin-slot .signed{color:var(--accent-ink);font-size:13px}
@@ -414,7 +423,7 @@ let credential=null;
       sc.src='https://accounts.google.com/gsi/client'; sc.async=true; sc.defer=true;
       sc.onload=()=>{ try{
         google.accounts.id.initialize({client_id:AUTH.client_id,
-          callback:r=>{ credential=r.credential;
+          callback:r=>{ credential=r.credential; track('signin');
             document.querySelectorAll('.signin-slot').forEach(e=>{
               e.innerHTML='<span class="signed">Signed in — you can send feedback now</span>'; });
           }});
@@ -520,14 +529,36 @@ function closePanel(){ panel.innerHTML=''; }
 document.getElementById('btn-feedback').onclick=()=>{
   if(panel.dataset.open==='fb'){ closePanel(); panel.dataset.open=''; return; }
   panel.dataset.open='fb';
+  // Buttons rather than a blank box. Nobody can be expected to describe
+  // from memory what they were shown, and a typing box gets abandoned.
+  // What was on screen is attached automatically.
+  const ctx = lastQuestion
+    ? `<p class="lead">About your search: <em>${esc(lastQuestion)}</em></p>`
+    : '<p class="lead">What would you like to tell us?</p>';
+  const OPTIONS = lastQuestion ? [
+    ['wrong_hadith',  'The hadith shown did not answer my question'],
+    ['missing',       'I expected a hadith that was not shown'],
+    ['no_answer',     'It said it could not find anything, but there is one'],
+    ['hard_to_read',  'The wording was hard to understand'],
+    ['wrong_source',  'I think a citation or reference is wrong'],
+    ['good',          'Actually this worked well']
+  ] : [
+    ['slow',          'The site is slow'],
+    ['confusing',     'I was not sure how to use it'],
+    ['search_bad',    'My searches do not find what I want'],
+    ['idea',          'I have a suggestion'],
+    ['good',          'I just wanted to say it is useful']
+  ];
   panel.innerHTML=`<div class="panel glass">
     <h3>Tell us what you think</h3>
-    <p class="lead">Anything at all — an answer that was wrong, something
-      confusing, or a hadith you expected to find and didn't.</p>
-    <textarea rows="4" id="fb-text"
-      placeholder="What would you like us to know?"></textarea>
+    ${ctx}
+    <div class="opts">
+      ${OPTIONS.map(([v,l])=>`<button type="button" class="opt" data-v="${v}">${esc(l)}</button>`).join('')}
+    </div>
+    <textarea rows="2" id="fb-text"
+      placeholder="Anything to add? (optional)"></textarea>
     <div class="row">
-      <button class="send" id="fb-send">Send</button>
+      <button class="send" id="fb-send" disabled>Send</button>
       <button class="cancel" id="fb-cancel">Cancel</button>
     </div>
     ${signinBlock()}
@@ -535,16 +566,22 @@ document.getElementById('btn-feedback').onclick=()=>{
       only an anonymous token, and only to keep out spam.</p>
   </div>`;
   renderSignin();
+  let chosen=null;
+  panel.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+    panel.querySelectorAll('.opt').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); chosen=b.dataset.v;
+    document.getElementById('fb-send').disabled=false;
+  });
   document.getElementById('fb-cancel').onclick=()=>{closePanel();panel.dataset.open='';};
   document.getElementById('fb-send').onclick=async()=>{
+    if(!chosen) return;
     const detail=document.getElementById('fb-text').value.trim();
-    if(!detail) return;
     document.getElementById('fb-send').disabled=true;
     try{
       const rr=await fetch('/api/feedback',{method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({reason:'general', detail, question:lastQuestion,
-                             credential, visitor:VISITOR})});
+        body:JSON.stringify({reason:chosen, detail, question:lastQuestion,
+                             shown_ids:shownIds, credential, visitor:VISITOR})});
       if(rr.status===401){
         const e=await rr.json().catch(()=>({}));
         panel.innerHTML='<div class="panel glass"><h3>Sign in to send this</h3>'+
@@ -584,6 +621,7 @@ const out=document.getElementById('out'), qEl=document.getElementById('q'),
       go=document.getElementById('go'), bg=document.getElementById('bg'),
       glow=document.getElementById('glow');
 let lastQuestion='';
+let shownIds=[];
 
 /* Parallax + cursor glow. Both are written to a rAF so a fast mouse cannot
    queue up more layout work than the browser can paint. */
@@ -632,6 +670,7 @@ function render(data){
       'Check the spelling of any Arabic words too.</p></div>';
     return;
   }
+  shownIds=data.results.map(h=>h.id);
   out.innerHTML=data.results.map((h,i)=>cardHTML(h,i)).join('');
   wireCards();
 }

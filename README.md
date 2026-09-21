@@ -119,6 +119,31 @@ no question text, and nothing tied to a Google account. The token exists only
 so "how many people searched" can be told apart from "how many searches
 happened".
 
+## Knowing when something breaks
+
+`healthcheck.py` asks the running site questions it already knows the
+answers to, and fails loudly if they change:
+
+```bash
+python3 healthcheck.py --quiet        # prints only on failure
+```
+
+It checks the site responds, the corpus is loaded, the relevance check is
+switched on, the daily hadith resolves, four known questions still return
+the right hadith, and obvious nonsense is still refused. Exit code 0 means
+healthy, 1 means something failed — so it works from cron or any alerting
+tool without parsing output.
+
+The known-answer checks are the point. **A site can be up, fast and
+completely wrong** — that is exactly the failure this project kept hitting,
+and an ordinary uptime monitor cannot see it.
+
+Run it hourly:
+
+```
+0 * * * * cd /path/to/app && python3 healthcheck.py --quiet --base https://yoursite || echo "hadith app check failed"
+```
+
 ## Reporting a wrong answer
 
 Every result has a **Report** button. It asks what went wrong — nothing to do
