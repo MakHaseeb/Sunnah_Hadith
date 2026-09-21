@@ -180,6 +180,40 @@ Reports are **not** applied automatically. Nothing reshuffles which hadith
 are shown based on votes. For scripture that would be a bad idea — people
 can be mistaken, and silent drift would be impossible to notice.
 
+## Deploying to Hugging Face Spaces
+
+```bash
+./deploy_to_hf.sh YOUR-USERNAME/hadith-search
+```
+
+The `Dockerfile` builds the search index **during the image build**, not at
+startup. Building it takes about four minutes — fine once, intolerable every
+time a sleeping Space wakes up and makes a visitor wait. Baked into the
+image, a woken Space serves its first request immediately.
+
+It also installs the CPU-only PyTorch wheel. The default pulls ~2GB of CUDA
+libraries that a CPU Space can never use.
+
+The PDF is not in the repo, so the container builds the corpus from the
+structured source alone. Records then show as "single source" rather than
+"cross-checked"; **search quality is unaffected** — all 14,916 doc2query
+expansions still match.
+
+Set these as **Space secrets** (Settings → Variables and secrets), never in
+the code:
+
+| secret | why |
+|---|---|
+| `ANTHROPIC_API_KEY` | the relevance check |
+| `GOOGLE_CLIENT_ID` | sign-in for feedback |
+| `HADITH_ID_SALT` | any long random string |
+| `HADITH_DAILY_CAP` | e.g. `1000` — bounds the daily bill |
+| `HADITH_VISITOR_CAP` | e.g. `20` |
+| `HADITH_SUPPORT_URL` | your Ko-fi or PayPal link, if you want the button |
+
+Add your Space address to the Google OAuth **authorised origins**, or
+sign-in will silently fail: `https://YOUR-USERNAME-hadith-search.hf.space`
+
 ## Running it
 
 ```bash

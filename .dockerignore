@@ -1,0 +1,15 @@
+.git
+.env
+*.pyc
+__pycache__/
+.DS_Store
+Sahih_Bukhari.pdf
+data/cache/
+data/raw/
+data/corpus.json
+data/bukhari_verified.json
+data/cross_check_report.json
+data/events.jsonl
+data/feedback.jsonl
+data/doc2query/sample_*.json
+data/doc2query/full_*.json
