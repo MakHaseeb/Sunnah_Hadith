@@ -26,7 +26,10 @@ fi
 ORIGINAL_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
 cleanup() {
-  git checkout -q "$ORIGINAL_BRANCH" 2>/dev/null || true
+  # -f because the background image is tracked on the original branch but
+  # untracked on the orphan one, so a plain checkout refuses to overwrite it.
+  # Safe: the file on disk is identical either way, only git's view differs.
+  git checkout -qf "$ORIGINAL_BRANCH" 2>/dev/null || true
   git branch -D hf-deploy >/dev/null 2>&1 || true
   git remote remove hf >/dev/null 2>&1 || true
   rm -f README_GITHUB.md
