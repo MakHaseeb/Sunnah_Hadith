@@ -18,6 +18,13 @@ claim is checkable.
 COLLECTION_NAMES = {
     "bukhari": "Sahih al-Bukhari",
     "muslim": "Sahih Muslim",
+    # The two Sunan are named as they are normally cited. Neither carries
+    # "Sahih" in its title, and adding it would be a false claim: these
+    # collections gather reports of varying strength rather than asserting
+    # every entry is authentic, which is exactly why each result here also
+    # shows its own grading.
+    "abudawud": "Sunan Abu Dawud",
+    "tirmidhi": "Jami' at-Tirmidhi",
 }
 
 

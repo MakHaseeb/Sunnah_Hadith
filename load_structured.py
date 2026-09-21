@@ -50,6 +50,8 @@ CDN = "https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions"
 COLLECTIONS = {
     "bukhari": "eng-bukhari",
     "muslim": "eng-muslim",
+    "abudawud": "eng-abudawud",
+    "tirmidhi": "eng-tirmidhi",
 }
 
 
@@ -136,11 +138,20 @@ def load_collection(name="bukhari", force_download=False):
             "narrator": narrator,
             "text": body,
             "grades": h.get("grades") or [],
+            # Bukhari and Muslim carry no grades -- the collection is the
+            # grading. The Sunan grade each report individually, and some
+            # are weak; see grading.py.
+            "grade_verdict": None,      # filled in below
+            "grade_label": None,
             "source": "structured",
             # Filled in by align_sources.py once cross-checked against the PDF.
             "usc_reference": None,
             "verification": None,
         })
+
+    from grading import classify
+    for r in records:
+        r["grade_verdict"], r["grade_label"] = classify(r)
     return records
 
 

@@ -115,6 +115,10 @@ def _payload(hadith, score, why=None):
         "provenance": verification_note(hadith),
         "cross_checked": bool((hadith.get("verification") or {})
                               .get("verified_against_pdf")),
+        # Shown on every result from the Sunan, which grade each report.
+        # Bukhari and Muslim carry none: the collection is the grading.
+        "grade": hadith.get("grade_label"),
+        "collection": hadith.get("collection"),
         "why": why,
         "match": round(float(score), 2),
     }

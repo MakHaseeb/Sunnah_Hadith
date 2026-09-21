@@ -26,7 +26,7 @@ DATA_DIR = os.path.join(SCRIPT_DIR, "data")
 BUKHARI_VERIFIED = os.path.join(DATA_DIR, "bukhari_verified.json")
 CORPUS_PATH = os.path.join(DATA_DIR, "corpus.json")
 
-COLLECTIONS = ["bukhari", "muslim"]
+COLLECTIONS = ["bukhari", "muslim", "abudawud", "tirmidhi"]
 
 
 def build(collections=COLLECTIONS):
@@ -49,6 +49,18 @@ def build(collections=COLLECTIONS):
 
     ids = [r["id"] for r in corpus]
     assert len(ids) == len(set(ids)), "duplicate record ids across collections"
+
+    # Weak hadith are dropped here rather than filtered at search time, so no
+    # part of the system can accidentally surface one. See grading.py for why
+    # this matters more than anything else in the project.
+    from grading import classify
+    weak = [r for r in corpus if classify(r)[0] == "weak"]
+    if weak:
+        kept = [r for r in corpus if classify(r)[0] != "weak"]
+        import collections as _c
+        by = _c.Counter(r["collection"] for r in weak)
+        print(f"  excluded {len(weak):,} graded weak: {dict(by)}")
+        corpus = kept
     return corpus
 
 

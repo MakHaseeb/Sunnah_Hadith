@@ -207,6 +207,16 @@
     -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
   .badge.single{background:rgba(122,92,34,.13);color:var(--warn);
     border-color:rgba(122,92,34,.24)}
+  /* The scholarly grading, for the collections that carry one. Given its
+     own colour so it is never mistaken for our own provenance note. */
+  .badge.grade{background:rgba(95,150,210,.14);color:#9fc4e8;
+    border-color:rgba(95,150,210,.26)}
+  /* Where recognised scholars reached different verdicts on the same
+     report. Kept, because at least one judged it sound -- but marked in a
+     different colour, because a reader deciding what to do deserves to
+     see that the judgement is contested rather than settled. */
+  .badge.grade.differs{background:rgba(122,92,34,.13);color:var(--warn);
+    border-color:rgba(122,92,34,.26)}
   .report{margin-left:auto;padding:6px 13px;font-size:12px;border-radius:99px;
     background:transparent;border:1px solid var(--glass-line);color:var(--muted);
     font-family:'Inter',system-ui,sans-serif;transition:all .22s ease}
@@ -344,7 +354,7 @@
 <div class="wrap">
   <header>
     <h1>Hadith Search</h1>
-    <p class="sub">Ask a question in your own words. Answers come only from Sahih al-Bukhari and Sahih Muslim.</p>
+    <p class="sub">Ask a question in your own words. Answers come only from authenticated hadith collections.</p>
   </header>
 
   <div class="col-left">
@@ -389,8 +399,9 @@
   </div>
 
   <footer class="col-main">
-    Sahih al-Bukhari and Sahih Muslim · every result carries its reference so you can verify it<br>
-    Not a substitute for scholarly guidance.
+    Sahih al-Bukhari · Sahih Muslim · Sunan Abu Dawud · Jami' at-Tirmidhi<br>
+    Every result carries its reference, and its grading where the collection gives one.<br>
+    Hadith graded weak are not shown. Not a substitute for scholarly guidance.
   </footer>
 </div>
 
@@ -711,6 +722,7 @@ function cardHTML(h,i){
       ${h.narrator?`<div class="narr">Narrated ${esc(h.narrator)}</div>`:''}
       <div class="text">${esc(h.text)}</div>
       <div class="meta">
+        ${h.grade?`<span class="badge grade${/differ/.test(h.grade)?' differs':''}" title="${/differ/.test(h.grade)?'Scholars reached different verdicts on this report. At least one graded it sound, so it is shown -- but the grading is contested.':'Authenticity grading recorded for this hadith.'}">${esc(h.grade)}</span>`:''}
         <span class="badge ${h.cross_checked?'':'single'}">
           ${h.cross_checked?'Checked against a second source':'Single source'}</span>
         <button class="report">Report</button>
