@@ -32,3 +32,6 @@ venv/
 .DS_Store
 
 # (bg-photo.jpg is from Pexels — free for commercial use — so it IS committed)
+
+# Runtime data: anonymous event counts
+data/events.jsonl

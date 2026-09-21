@@ -53,6 +53,57 @@ It is shown with *"Save yourself from Hell-fire even by giving half a
 date-fruit in charity"* (Bukhari 1417) — the point being that any amount
 counts, and none is expected.
 
+## Signing in
+
+**Searching never requires an account.** Anyone can use the site anonymously
+— asking for a sign-in before someone can look up a hadith would turn away
+exactly the casual visitor this is for, and there is nothing to protect.
+
+**Feedback requires signing in**, once it is configured. Feedback is written
+into a file a person reads and acts on, so it needs to cost enough to abuse
+that nobody bothers. A sign-in does that without a CAPTCHA.
+
+```bash
+export GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
+export HADITH_ID_SALT="any long random string"
+```
+
+Create the client id at [console.cloud.google.com](https://console.cloud.google.com)
+→ APIs & Services → Credentials → OAuth client ID → Web application, and add
+your site's address to the authorised origins.
+
+Until `GOOGLE_CLIENT_ID` is set, sign-in is simply off and feedback stays
+open — nothing breaks.
+
+**What is stored:** a salted hash of the Google account id. No email, no
+name, no picture. Enough to notice one person sending fifty reports; not
+enough to know who they are.
+
+## Analytics
+
+Counts only, at `/api/stats`:
+
+| | |
+|---|---|
+| `visitors` / `visits` | how many people, how many page opens |
+| `searches` / `people_who_searched` | questions asked, and by how many people |
+| `answered` / `no_answer` / `answer_rate` | how often a question got an answer |
+| `feedback` / `people_who_gave_feedback` | reports received |
+| `support_opened` / `support_clicked` | how many looked, how many gave |
+
+Plus a day-by-day breakdown. Read them with `python3 analytics.py`.
+
+**No third-party analytics.** Google Analytics and its equivalents work by
+sending your visitors' data to an advertising company — for a religious site
+that means telling them who reads hadith and what they searched for. Counting
+locally gives the same numbers without any of that.
+
+**What is recorded:** the date, the event name, and a random token the
+browser generates for itself. No IP address, no browser string, no location,
+no question text, and nothing tied to a Google account. The token exists only
+so "how many people searched" can be told apart from "how many searches
+happened".
+
 ## Reporting a wrong answer
 
 Every result has a **Report** button. It asks what went wrong — nothing to do

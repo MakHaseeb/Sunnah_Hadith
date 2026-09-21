@@ -246,6 +246,9 @@
     background:linear-gradient(180deg,#9a6a28,#6b461a);
     box-shadow:0 4px 16px rgba(138,95,40,.42)}
   .panel .note{color:var(--muted);font-size:12.5px;margin-top:12px;line-height:1.6}
+  .signin-slot{margin:14px 0 4px}
+  .signin-slot .signed{color:var(--accent-ink);font-size:13px}
+  #gbtn{margin-top:10px}
 
   footer{margin-top:52px;text-align:center;position:relative;padding:16px 10px}
   footer::before{content:'';position:absolute;inset:-40px -55%;z-index:-1;
@@ -319,6 +322,60 @@ const REASONS = [
   ["other","Something else"]
 ];
 const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* An opaque token this browser makes for itself. Never linked to a Google
+   account, never sent anywhere but this server. It exists so "how many
+   people searched" can be distinguished from "how many searches happened".
+   Clearing site data resets it, which is the point. */
+const VISITOR = (()=>{
+  try{
+    let v=localStorage.getItem('hv');
+    if(!v){ v=([1e7]+'').replace(/[018]/g,c=>
+      (c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16))
+      + Date.now().toString(36);
+      localStorage.setItem('hv',v); }
+    return v.slice(0,32);
+  }catch(e){ return ''; }   /* private mode: counted as a visit, not a person */
+})();
+function track(event){
+  try{ fetch('/api/event',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({event, visitor:VISITOR})}); }catch(e){}
+}
+track('visit');
+
+let AUTH={enabled:false, client_id:null};
+let credential=null;
+(async ()=>{
+  try{
+    AUTH=await (await fetch('/api/auth')).json();
+    if(AUTH.enabled && AUTH.client_id){
+      const sc=document.createElement('script');
+      sc.src='https://accounts.google.com/gsi/client'; sc.async=true; sc.defer=true;
+      sc.onload=()=>{ try{
+        google.accounts.id.initialize({client_id:AUTH.client_id,
+          callback:r=>{ credential=r.credential;
+            document.querySelectorAll('.signin-slot').forEach(e=>{
+              e.innerHTML='<span class="signed">Signed in — you can send feedback now</span>'; });
+          }});
+      }catch(e){} };
+      document.head.appendChild(sc);
+    }
+  }catch(e){}
+})();
+function signinBlock(){
+  if(!AUTH.enabled) return '';
+  if(credential) return '<p class="note">Signed in.</p>';
+  return `<div class="signin-slot"><p class="note">Sign in with Google to send
+    feedback. We store only an anonymous token — never your name or email.</p>
+    <div id="gbtn"></div></div>`;
+}
+function renderSignin(){
+  if(!AUTH.enabled || credential) return;
+  const el=document.getElementById('gbtn');
+  if(el && window.google) google.accounts.id.renderButton(el,
+    {theme:'filled_black', size:'large', shape:'pill', text:'signin_with'});
+}
+
 const panel=document.getElementById('panel');
 const dailyEl=document.getElementById('daily');
 let supportInfo=null;
@@ -362,18 +419,28 @@ document.getElementById('btn-feedback').onclick=()=>{
       <button class="send" id="fb-send">Send</button>
       <button class="cancel" id="fb-cancel">Cancel</button>
     </div>
-    <p class="note">We read every message. Nothing is collected about you —
-      no name, no account, no tracking.</p>
+    ${signinBlock()}
+    <p class="note">We read every message. We never store your name or email —
+      only an anonymous token, and only to keep out spam.</p>
   </div>`;
+  renderSignin();
   document.getElementById('fb-cancel').onclick=()=>{closePanel();panel.dataset.open='';};
   document.getElementById('fb-send').onclick=async()=>{
     const detail=document.getElementById('fb-text').value.trim();
     if(!detail) return;
     document.getElementById('fb-send').disabled=true;
     try{
-      await fetch('/api/feedback',{method:'POST',
+      const rr=await fetch('/api/feedback',{method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({reason:'general', detail, question:lastQuestion})});
+        body:JSON.stringify({reason:'general', detail, question:lastQuestion,
+                             credential, visitor:VISITOR})});
+      if(rr.status===401){
+        const e=await rr.json().catch(()=>({}));
+        panel.innerHTML='<div class="panel glass"><h3>Sign in to send this</h3>'+
+          '<p class="lead">'+esc(e.detail||'Please sign in first.')+'</p>'+
+          signinBlock()+'</div>';
+        renderSignin(); panel.dataset.open=''; return;
+      }
       panel.innerHTML='<div class="panel glass"><h3>Thank you</h3>'+
         '<p class="lead">That has been recorded and will be read.</p></div>';
     }catch(e){
@@ -385,6 +452,7 @@ document.getElementById('btn-feedback').onclick=()=>{
 };
 
 document.getElementById('btn-support').onclick=()=>{
+  track('support_open');
   if(panel.dataset.open==='sup'){ closePanel(); panel.dataset.open=''; return; }
   panel.dataset.open='sup';
   const h=supportInfo && supportInfo.hadith;
@@ -396,7 +464,7 @@ document.getElementById('btn-support').onclick=()=>{
       little for every question asked. If you would like to help it keep
       going, any amount is welcome — and none is expected.</p>
     <a class="give" href="${esc(supportInfo.url)}" target="_blank"
-       rel="noopener noreferrer">Give a gift</a>
+       rel="noopener noreferrer" onclick="track('support_click')">Give a gift</a>
     <p class="note">Opens in a new tab. We never see your payment details.</p>
   </div>`;
 };

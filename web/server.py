@@ -44,6 +44,8 @@ from citations import format_citation, verification_note      # noqa: E402
 from expansion import load_expansions                          # noqa: E402
 from hybrid_retrieve import HybridStore                        # noqa: E402
 from daily_hadith import hadith_for, SUPPORT_HADITH_ID          # noqa: E402
+import analytics                                                # noqa: E402
+import google_auth                                              # noqa: E402
 
 FEEDBACK_PATH = os.path.join(PROJECT_DIR, "data", "feedback.jsonl")
 SHORTLIST = 10
@@ -82,6 +84,7 @@ def startup():
 
 class SearchRequest(BaseModel):
     question: str
+    visitor: Optional[str] = ""
 
 
 class FeedbackRequest(BaseModel):
@@ -92,6 +95,8 @@ class FeedbackRequest(BaseModel):
     hadith_id: Optional[str] = ""
     reason: str
     detail: Optional[str] = ""
+    credential: Optional[str] = ""   # Google ID token, when sign-in is on
+    visitor: Optional[str] = ""
 
 
 def _payload(hadith, score, why=None):
@@ -116,9 +121,11 @@ def search(req: SearchRequest):
     if len(question) > 500:
         raise HTTPException(status_code=400, detail="That question is too long.")
 
+    analytics.record("search", req.visitor)
     store = STATE["store"]
     retrieved = store.retrieve(question, k=SHORTLIST)
     if not retrieved:
+        analytics.record("no_answer", req.visitor)
         return {"results": [], "checked": False}
 
     client = STATE.get("client")
@@ -136,10 +143,38 @@ def search(req: SearchRequest):
         chosen.sort(key=lambda pair: len(pair[0][0]["text"].split()))
         chosen = chosen[:MAX_SHOWN]
 
+    analytics.record("answered" if chosen else "no_answer", req.visitor)
     return {
         "results": [_payload(item[0], item[4], (v or {}).get("why"))
                     for item, v in chosen],
         "checked": bool(client),
+    }
+
+
+class EventRequest(BaseModel):
+    event: str
+    visitor: Optional[str] = ""
+
+
+@app.post("/api/event")
+def event(req: EventRequest):
+    ok = analytics.record(req.event, req.visitor)
+    return {"ok": ok}
+
+
+@app.get("/api/stats")
+def stats(days: int = 30):
+    """Counts for the site owner. No identities, by design."""
+    return analytics.summary(days=days)
+
+
+@app.get("/api/auth")
+def auth_config():
+    """Tells the page whether sign-in is switched on, and what it gates."""
+    return {
+        "enabled": google_auth.configured(),
+        "client_id": google_auth.CLIENT_ID or None,
+        "required_for": ["feedback"],
     }
 
 
@@ -169,12 +204,26 @@ def support():
 
 @app.post("/api/feedback")
 def feedback(req: FeedbackRequest):
+    # Sign-in gates feedback only, and only when it has been configured.
+    # If it is switched off the site still works exactly as before, rather
+    # than silently rejecting everyone.
+    user = None
+    if google_auth.configured():
+        user = google_auth.verify(req.credential)
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Please sign in first — it keeps this free of spam.")
+
     record = {
         "id": uuid.uuid4().hex[:12],
         "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "question": (req.question or "")[:500],
         "hadith_id": (req.hadith_id or "")[:64],
         "kind": "result" if req.hadith_id else "general",
+        # An opaque token, not a name or an email. Enough to spot one person
+        # sending fifty reports; not enough to know who they are.
+        "by": user,
         "reason": req.reason[:64],
         "detail": (req.detail or "")[:1000],
     }
@@ -182,6 +231,7 @@ def feedback(req: FeedbackRequest):
     with open(FEEDBACK_PATH, "a") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
         f.flush()
+    analytics.record("feedback", req.visitor)
     return {"ok": True, "id": record["id"]}
 
 
