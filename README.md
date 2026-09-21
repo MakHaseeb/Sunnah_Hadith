@@ -89,6 +89,10 @@ or anyone who finds it can run up your bill.
   [hadith-api](https://github.com/fawazahmed0/hadith-api) dataset.
 - Cross-check source: *Sahih Al-Bukhari* PDF published by
   [islamhouse.com](https://islamhouse.com).
+- Background image: carved geometric latticework, from
+  [Pexels](https://pexels.com) — free for commercial use. Chosen over a
+  calligraphy image deliberately: geometric ornament carries no question
+  about whether sacred text is being used decoratively.
 - The hadith themselves are the sayings of the Prophet ﷺ as preserved by
   Imam al-Bukhari and Imam Muslim. Any error here is in this software, never
   in them.

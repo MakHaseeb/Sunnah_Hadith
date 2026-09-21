@@ -8,19 +8,19 @@
   /* To use a photograph instead of the woven pattern, change --bg-image
      to url('your-photo.jpg'). Everything else adapts on its own. */
   :root{
-    --bg-image: url('/static/bg.svg');
-    --bg-dim: .75;                 /* light mode: pattern stays visible */
-    --ink:#161512; --muted:#5f5b52;
-    --accent:#137a56; --accent-ink:#0b4b35;
-    --warn:#7a5c22;
-    --glass: rgba(255,255,255,.62);
-    --glass-edge: rgba(255,255,255,.85);
-    --glass-line: rgba(20,20,20,.10);
-    --shadow: 0 8px 28px rgba(18,28,24,.10);
+    --bg-image: url('/static/bg-photo.jpg');
+    --bg-dim: .30;                 /* photo is already dark; barely dim it */
+    --ink:#f2efe8; --muted:#b3ada2;
+    --accent:#3fbf8f; --accent-ink:#8fe3c0;
+    --warn:#e0bb6a;
+    --glass: rgba(22,30,40,.46);
+    --glass-edge: rgba(255,255,255,.20);
+    --glass-line: rgba(255,255,255,.10);
+    --shadow: 0 10px 34px rgba(0,0,0,.45);
   }
   @media (prefers-color-scheme: dark){
     :root{
-      --bg-dim:.55;                /* dark mode: gold reads as texture */
+      --bg-dim:.22;                /* photo is already dark */
       --ink:#f0ede6; --muted:#a8a298;
       --accent:#5fd3a6; --accent-ink:#8ee6c2;
       --warn:#e0bb6a;
@@ -41,7 +41,18 @@
   #bg{
     position:fixed; inset:-8%; z-index:-2;
     background-image:var(--bg-image);
-    background-size:340px 340px;
+    /* The photo is a portrait composition: ornament dense at the top,
+       dissolving to plain dark below. Anchored to the top so the ornament
+       sits behind the header and the content lands on the clear area. */
+    /* The lattice photo is high-contrast and busy, so it is treated as a
+       texture rather than a picture: covered, softened, and dimmed hard so
+       the frosted cards read cleanly on top of it. */
+    background-size:cover;
+    background-position:center;
+    background-repeat:no-repeat;
+    background-color:#0b1420;
+    filter:blur(1.5px) saturate(.75);
+    background-color:#0b1622;
     opacity:var(--bg-dim);
     will-change:transform;
     transition:opacity .4s ease;
@@ -49,11 +60,11 @@
   #bg::after{ /* vignette so text never fights the pattern */
     content:''; position:absolute; inset:0;
     background:radial-gradient(ellipse at 50% 30%,
-      rgba(250,249,245,.30) 0%, rgba(250,249,245,.66) 55%, rgba(250,249,245,.88) 100%);
+      rgba(10,18,28,.10) 0%, rgba(10,18,28,.42) 55%, rgba(10,18,28,.72) 100%);
   }
   @media (prefers-color-scheme: dark){
     #bg::after{background:radial-gradient(ellipse at 50% 30%,
-      rgba(8,14,20,.30) 0%, rgba(8,14,20,.62) 55%, rgba(8,14,20,.86) 100%);}
+      rgba(6,12,20,.18) 0%, rgba(6,12,20,.48) 55%, rgba(6,12,20,.78) 100%);}
   }
   /* --- cursor glow --- */
   #glow{
