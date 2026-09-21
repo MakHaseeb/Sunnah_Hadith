@@ -106,7 +106,17 @@
   .side{padding:16px 16px 14px}
   .side h4{margin:0 0 11px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;
     color:var(--accent-ink);opacity:.8;font-family:'Inter',system-ui,sans-serif;font-weight:600}
-  .topics{display:flex;flex-direction:column;gap:2px}
+  /* Twenty-two topics is a long column. Capped in height with its own
+     scrollbar so the list never pushes the page down, and the search box
+     stays where the eye expects it. */
+  .topics{display:flex;flex-direction:column;gap:2px;
+    max-height:min(58vh,420px);overflow-y:auto;overscroll-behavior:contain;
+    padding-right:4px;
+    scrollbar-width:thin;scrollbar-color:rgba(232,200,141,.32) transparent}
+  .topics::-webkit-scrollbar{width:6px}
+  .topics::-webkit-scrollbar-thumb{background:rgba(232,200,141,.30);border-radius:99px}
+  .topics::-webkit-scrollbar-thumb:hover{background:rgba(232,200,141,.50)}
+  .topics::-webkit-scrollbar-track{background:transparent}
   .topics button{background:none;border:0;text-align:left;cursor:pointer;
     color:var(--ink);font-family:"Cormorant Garamond",ui-serif,Georgia,serif;
     font-size:16.5px;padding:5px 9px;border-radius:8px;width:100%;
@@ -228,11 +238,11 @@
   /* Deliberately small. It is a grace note before the search box, not the
      point of the page -- the search box is. */
   .daily{padding:13px 18px;margin:0 0 14px;position:relative}
-  .daily-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+  .daily-label{margin-bottom:7px}
   .daily-label{font-family:'Inter',system-ui,sans-serif;font-size:9.5px;
     letter-spacing:.2em;text-transform:uppercase;color:var(--accent-ink);
     opacity:.8;white-space:nowrap}
-  .daily .cite{font-size:12px;margin:0;opacity:.85;font-weight:500;
+  .daily .cite{font-size:12px;margin:9px 0 0;opacity:.85;font-weight:500;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .daily .text{font-size:16px;line-height:1.62;margin:0}
   .daily.clipped .text{display:-webkit-box;-webkit-line-clamp:2;
@@ -317,7 +327,8 @@
     .col-left{order:2} .col-main{order:3} .col-right{order:4}
     .side{margin-bottom:14px;padding:13px 14px}
     .side h4{margin-top:0;margin-bottom:9px}
-    .topics{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px}
+    .topics{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px;
+      max-height:none;overflow:visible;padding-right:0}
     .topics button{flex:0 0 auto;width:auto;font-size:15px;padding:5px 11px;
       border:1px solid var(--glass-line);border-radius:99px}
     .topics .n{display:none}
@@ -338,7 +349,7 @@
 
   <div class="col-left">
     <div class="side glass">
-      <h4>Browse by topic</h4>
+      <h4>Topics</h4>
       <div class="topics" id="topics"></div>
     </div>
   </div>
@@ -499,12 +510,10 @@ let supportInfo=null;
     const h=d.hadith;
     const long = h.text.length > 150;
     dailyEl.innerHTML=`<div class="glass daily${long?' clipped':''}">
-      <div class="daily-head">
-        <span class="daily-label">Hadith of the day</span>
-        <span class="cite">${esc(h.citation)}</span>
-      </div>
+      <div class="daily-label">Hadith of the day</div>
       <p class="text">${esc(h.text)}</p>
       ${long?'<button type="button" class="more">Read it all</button>':''}
+      <div class="cite">${esc(h.citation)}</div>
     </div>`;
     const btn=dailyEl.querySelector('.more');
     if(btn) btn.onclick=()=>{
