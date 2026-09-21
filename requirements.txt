@@ -1,7 +1,14 @@
-sentence-transformers>=2.2
-scikit-learn>=1.0
-numpy>=1.21
-anthropic>=0.40
-fastapi>=0.100
-uvicorn>=0.20
-google-auth>=2.0
+# Pinned to the exact versions verified working together on the development
+# machine. The first container build left these open, pip resolved the latest
+# sentence-transformers, that pulled a transformers release incompatible with
+# the torch already installed, and the build died with "PyTorch was not found"
+# followed by a NameError inside transformers itself.
+torch==2.8.0
+sentence-transformers==5.1.2
+transformers==4.57.6
+scikit-learn==1.6.1
+numpy==2.0.2
+anthropic==0.125.0
+fastapi==0.128.8
+uvicorn==0.39.0
+google-auth==2.50.0

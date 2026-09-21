@@ -19,11 +19,24 @@ ENV PIP_NO_CACHE_DIR=1 \
 
 WORKDIR /app
 
+# Torch first, from the CPU-only index. The default PyPI wheel drags in
+# ~2GB of CUDA libraries that a CPU Space can never use.
+#
+# The version is pinned to match requirements.txt exactly. Installing a
+# different torch here and letting the next step resolve the rest is what
+# broke the first build: pip pulled the newest sentence-transformers, which
+# required a newer transformers, which was incompatible with the torch
+# already present -- "PyTorch was not found", then a NameError inside
+# transformers. With both pinned to the same version, the second install
+# sees its torch requirement already satisfied and leaves it alone.
 RUN pip install --no-cache-dir \
-      torch==2.4.1 --index-url https://download.pytorch.org/whl/cpu
+      --index-url https://download.pytorch.org/whl/cpu \
+      torch==2.8.0
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+ && python -c "import torch, sentence_transformers, transformers; \
+print(f'torch {torch.__version__}, sentence-transformers {sentence_transformers.__version__}, transformers {transformers.__version__}')"
 
 COPY . .
 
