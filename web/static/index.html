@@ -202,12 +202,22 @@
     border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px}
   @keyframes spin{to{transform:rotate(360deg)}}
   /* hadith of the day */
-  .daily{padding:22px 24px;margin-bottom:26px;position:relative;overflow:hidden}
-  .daily-label{font-family:'Inter',system-ui,sans-serif;font-size:10.5px;
-    letter-spacing:.18em;text-transform:uppercase;color:var(--accent-ink);
-    opacity:.85;margin-bottom:12px}
-  .daily .text{font-size:20px;line-height:1.82}
-  .daily .cite{margin-top:14px;margin-bottom:0}
+  /* Deliberately small. It is a grace note before the search box, not the
+     point of the page -- the search box is. */
+  .daily{padding:13px 18px;margin:0 0 14px;position:relative}
+  .daily-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+  .daily-label{font-family:'Inter',system-ui,sans-serif;font-size:9.5px;
+    letter-spacing:.2em;text-transform:uppercase;color:var(--accent-ink);
+    opacity:.8;white-space:nowrap}
+  .daily .cite{font-size:12px;margin:0;opacity:.85;font-weight:500;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .daily .text{font-size:16px;line-height:1.62;margin:0}
+  .daily.clipped .text{display:-webkit-box;-webkit-line-clamp:2;
+    -webkit-box-orient:vertical;overflow:hidden}
+  .daily .more{background:none;border:0;padding:4px 0 0;cursor:pointer;
+    font-family:'Inter',system-ui,sans-serif;font-size:11.5px;
+    color:var(--accent-ink);opacity:.9}
+  .daily .more:hover{text-decoration:underline}
 
   /* the two action buttons under the search */
   .actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;
@@ -283,6 +293,8 @@
     how we fix it. Nothing here replaces asking a qualified scholar.
   </div>
 
+  <div id="daily"></div>
+
   <form id="f">
     <span class="field glass"><input type="text" id="q"
       placeholder="e.g. how should I treat my parents" autocomplete="off" autofocus></span>
@@ -296,6 +308,8 @@
     <button type="button" class="chip glass" data-q="what does Islam say about lying">lying</button>
   </div>
 
+  <div id="out"></div>
+
   <div class="actions">
     <button type="button" class="act glass" id="btn-feedback">
       <span class="ico">✎</span>Send feedback</button>
@@ -303,9 +317,6 @@
       <span class="ico">✦</span>Support this work</button>
   </div>
   <div id="panel"></div>
-
-  <div id="daily"></div>
-  <div id="out"></div>
 
   <footer>
     Sahih al-Bukhari and Sahih Muslim · every result carries its reference so you can verify it<br>
@@ -386,12 +397,21 @@ let supportInfo=null;
     const r=await fetch('/api/daily'); const d=await r.json();
     if(!d.hadith) return;
     const h=d.hadith;
-    dailyEl.innerHTML=`<div class="card glass daily">
-      <div class="daily-label">Hadith of the day</div>
-      ${h.narrator?`<div class="narr">Narrated ${esc(h.narrator)}</div>`:''}
-      <div class="text">${esc(h.text)}</div>
-      <div class="cite">${esc(h.citation)}</div>
+    const long = h.text.length > 150;
+    dailyEl.innerHTML=`<div class="glass daily${long?' clipped':''}">
+      <div class="daily-head">
+        <span class="daily-label">Hadith of the day</span>
+        <span class="cite">${esc(h.citation)}</span>
+      </div>
+      <p class="text">${esc(h.text)}</p>
+      ${long?'<button type="button" class="more">Read it all</button>':''}
     </div>`;
+    const btn=dailyEl.querySelector('.more');
+    if(btn) btn.onclick=()=>{
+      const card=dailyEl.querySelector('.daily');
+      const open=card.classList.toggle('clipped');
+      btn.textContent = open ? 'Read it all' : 'Show less';
+    };
   }catch(e){ /* the site works without it; never block the page on this */ }
 })();
 
