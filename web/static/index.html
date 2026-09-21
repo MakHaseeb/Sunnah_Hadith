@@ -6,11 +6,17 @@
 <title>Hadith Search</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- Amiri is a revival of classical Naskh, designed for Arabic typesetting;
-     its Latin has the same calligraphic pedigree, which suits this text far
-     better than a default system serif. Marcellus gives the headings an
-     inscriptional, carved feel that echoes the lattice behind them. -->
-<link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Marcellus&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Three faces, each with a job:
+     Amiri  — the hadith text itself. A revival of classical Naskh, drawn for
+              Arabic typesetting, so its Latin carries the same pedigree.
+              Reserved for scripture, which keeps it visually distinct from
+              anything the site says in its own voice.
+     Cormorant Garamond — everything the site says: title, notices, labels.
+              A display Garamond with high contrast and fine strokes; it is
+              the elegance in the page.
+     Inter  — buttons and badges only, where a neutral face stays legible at
+              12px in a way a fine-stroked serif does not. -->
+<link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   /* To use a photograph instead of the woven pattern, change --bg-image
      to url('your-photo.jpg'). Everything else adapts on its own. */
@@ -94,9 +100,11 @@
     background:radial-gradient(ellipse 52% 50% at 50% 48%,
       rgba(12,8,4,.82) 0%, rgba(12,8,4,.52) 42%, rgba(12,8,4,.18) 66%,
       rgba(12,8,4,0) 82%)}
-  h1{text-shadow:0 2px 18px rgba(12,8,4,.85);font-family:"Marcellus",ui-serif,Georgia,serif;font-size:46px;margin:0 0 12px;
-     letter-spacing:.012em;font-weight:400}
-  .sub{color:var(--muted);font-size:16.5px;margin:0;font-family:"Inter",system-ui,sans-serif}
+  h1{text-shadow:0 2px 18px rgba(12,8,4,.85);
+     font-family:"Cormorant Garamond",ui-serif,Georgia,serif;font-size:54px;
+     margin:0 0 10px;letter-spacing:.005em;font-weight:500;line-height:1.1}
+  .sub{color:var(--muted);font-size:19px;margin:0;font-style:italic;
+     font-family:"Cormorant Garamond",ui-serif,Georgia,serif}
 
   /* --- the glass treatment --- */
   .glass{
@@ -109,7 +117,8 @@
     box-shadow:var(--shadow), inset 0 1px 0 var(--glass-edge);
   }
 
-  .notice{padding:15px 18px;font-size:15px;margin-bottom:22px;
+  .notice{padding:17px 20px;font-size:18px;line-height:1.6;
+    font-family:"Cormorant Garamond",ui-serif,Georgia,serif;margin-bottom:22px;
     border-left:3px solid var(--warn)}
   form{display:flex;gap:9px;margin:0 0 10px}
   .field{flex:1;display:flex;padding:0}
@@ -152,8 +161,8 @@
   .cite{font-size:14.5px;color:var(--accent-ink);font-weight:700;margin-bottom:8px;
     font-family:'Inter',system-ui,sans-serif;letter-spacing:.005em}
   @media (prefers-color-scheme: dark){ .cite{color:var(--accent-ink)} }
-  .why{font-size:13.5px;color:var(--muted);font-style:italic;margin-bottom:9px;
-    font-family:'Inter',system-ui,sans-serif}
+  .why{font-size:15.5px;color:var(--muted);font-style:italic;margin-bottom:10px;
+    font-family:"Cormorant Garamond",ui-serif,Georgia,serif}
   .narr{font-size:15px;color:var(--muted);margin-bottom:6px}
   .text{white-space:pre-wrap;font-size:19px;line-height:1.8}
   .meta{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-top:15px;
@@ -184,13 +193,60 @@
     background:linear-gradient(180deg,var(--accent),var(--accent-ink))}
   .fb .cancel{padding:9px 16px;border-radius:10px;background:transparent;
     border:1px solid var(--glass-line);color:var(--muted)}
-  .empty,.status{text-align:center;padding:34px 22px;color:var(--muted);
+  .empty,.status{text-align:center;padding:34px 22px;color:var(--muted);font-size:18px;
+    font-family:"Cormorant Garamond",ui-serif,Georgia,serif;
     animation:rise .45s cubic-bezier(.22,1,.36,1) both}
   .thanks{color:var(--accent-ink);font-size:13px;font-family:'Inter',system-ui,sans-serif}
   .spinner{display:inline-block;width:15px;height:15px;margin-right:9px;
     border:2px solid var(--glass-line);border-top-color:rgba(232,200,141,.55);
     border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px}
   @keyframes spin{to{transform:rotate(360deg)}}
+  /* hadith of the day */
+  .daily{padding:22px 24px;margin-bottom:26px;position:relative;overflow:hidden}
+  .daily-label{font-family:'Inter',system-ui,sans-serif;font-size:10.5px;
+    letter-spacing:.18em;text-transform:uppercase;color:var(--accent-ink);
+    opacity:.85;margin-bottom:12px}
+  .daily .text{font-size:20px;line-height:1.82}
+  .daily .cite{margin-top:14px;margin-bottom:0}
+
+  /* the two action buttons under the search */
+  .actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;
+    margin:30px 0 6px}
+  .act{padding:11px 20px;border-radius:99px;font-size:13.5px;color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;font-weight:500;
+    transition:transform .22s cubic-bezier(.34,1.56,.64,1), box-shadow .22s ease,
+               border-top-color .22s ease}
+  .act:hover{transform:translateY(-2px);box-shadow:var(--shadow);
+    border-top-color:var(--accent-ink)}
+  .act .ico{margin-right:7px;opacity:.9}
+
+  /* panel that opens under those buttons */
+  .panel{padding:20px 22px;margin-top:14px;
+    animation:rise .4s cubic-bezier(.22,1,.36,1) both;
+    font-family:'Inter',system-ui,sans-serif;font-size:14px}
+  .panel h3{margin:0 0 6px;font-size:20px;font-weight:500;
+    font-family:"Cormorant Garamond",ui-serif,Georgia,serif}
+  .panel .lead{color:var(--muted);margin:0 0 14px;font-size:17px;
+    font-family:"Cormorant Garamond",ui-serif,Georgia,serif}
+  .panel .quote{border-left:2px solid var(--accent);padding:2px 0 2px 14px;
+    margin:0 0 16px;font-family:"Amiri",ui-serif,Georgia,serif;font-size:17px;
+    line-height:1.7}
+  .panel .quote .src{display:block;margin-top:7px;font-size:12.5px;
+    color:var(--accent-ink);font-family:'Inter',system-ui,sans-serif}
+  .panel textarea{width:100%;padding:11px;border-radius:10px;
+    border:1px solid var(--glass-line);font:inherit;resize:vertical;
+    background:rgba(0,0,0,.25);color:var(--ink)}
+  .panel .row{display:flex;gap:9px;margin-top:11px;flex-wrap:wrap}
+  .panel .send{padding:10px 18px;border-radius:10px;color:#fff;font-weight:500;
+    background:linear-gradient(180deg,#9a6a28,#6b461a)}
+  .panel .cancel{padding:10px 18px;border-radius:10px;background:transparent;
+    border:1px solid var(--glass-line);color:var(--muted)}
+  .panel .give{display:inline-block;padding:12px 24px;border-radius:99px;
+    color:#fff;font-weight:600;text-decoration:none;
+    background:linear-gradient(180deg,#9a6a28,#6b461a);
+    box-shadow:0 4px 16px rgba(138,95,40,.42)}
+  .panel .note{color:var(--muted);font-size:12.5px;margin-top:12px;line-height:1.6}
+
   footer{margin-top:52px;text-align:center;position:relative;padding:16px 10px}
   footer::before{content:'';position:absolute;inset:-40px -55%;z-index:-1;
     pointer-events:none;
@@ -237,6 +293,15 @@
     <button type="button" class="chip glass" data-q="what does Islam say about lying">lying</button>
   </div>
 
+  <div class="actions">
+    <button type="button" class="act glass" id="btn-feedback">
+      <span class="ico">✎</span>Send feedback</button>
+    <button type="button" class="act glass" id="btn-support" hidden>
+      <span class="ico">✦</span>Support this work</button>
+  </div>
+  <div id="panel"></div>
+
+  <div id="daily"></div>
   <div id="out"></div>
 
   <footer>
@@ -253,11 +318,93 @@ const REASONS = [
   ["wording","The text or translation looks wrong"],
   ["other","Something else"]
 ];
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const panel=document.getElementById('panel');
+const dailyEl=document.getElementById('daily');
+let supportInfo=null;
+
+/* ---- hadith of the day ---- */
+(async ()=>{
+  try{
+    const r=await fetch('/api/daily'); const d=await r.json();
+    if(!d.hadith) return;
+    const h=d.hadith;
+    dailyEl.innerHTML=`<div class="card glass daily">
+      <div class="daily-label">Hadith of the day</div>
+      ${h.narrator?`<div class="narr">Narrated ${esc(h.narrator)}</div>`:''}
+      <div class="text">${esc(h.text)}</div>
+      <div class="cite">${esc(h.citation)}</div>
+    </div>`;
+  }catch(e){ /* the site works without it; never block the page on this */ }
+})();
+
+/* ---- is a support link configured? ---- */
+(async ()=>{
+  try{
+    const r=await fetch('/api/support'); supportInfo=await r.json();
+    if(supportInfo && supportInfo.url)
+      document.getElementById('btn-support').hidden=false;
+  }catch(e){}
+})();
+
+function closePanel(){ panel.innerHTML=''; }
+
+document.getElementById('btn-feedback').onclick=()=>{
+  if(panel.dataset.open==='fb'){ closePanel(); panel.dataset.open=''; return; }
+  panel.dataset.open='fb';
+  panel.innerHTML=`<div class="panel glass">
+    <h3>Tell us what you think</h3>
+    <p class="lead">Anything at all — an answer that was wrong, something
+      confusing, or a hadith you expected to find and didn't.</p>
+    <textarea rows="4" id="fb-text"
+      placeholder="What would you like us to know?"></textarea>
+    <div class="row">
+      <button class="send" id="fb-send">Send</button>
+      <button class="cancel" id="fb-cancel">Cancel</button>
+    </div>
+    <p class="note">We read every message. Nothing is collected about you —
+      no name, no account, no tracking.</p>
+  </div>`;
+  document.getElementById('fb-cancel').onclick=()=>{closePanel();panel.dataset.open='';};
+  document.getElementById('fb-send').onclick=async()=>{
+    const detail=document.getElementById('fb-text').value.trim();
+    if(!detail) return;
+    document.getElementById('fb-send').disabled=true;
+    try{
+      await fetch('/api/feedback',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({reason:'general', detail, question:lastQuestion})});
+      panel.innerHTML='<div class="panel glass"><h3>Thank you</h3>'+
+        '<p class="lead">That has been recorded and will be read.</p></div>';
+    }catch(e){
+      panel.innerHTML='<div class="panel glass"><h3>Could not send that</h3>'+
+        '<p class="lead">Please try again in a moment.</p></div>';
+    }
+    panel.dataset.open='';
+  };
+};
+
+document.getElementById('btn-support').onclick=()=>{
+  if(panel.dataset.open==='sup'){ closePanel(); panel.dataset.open=''; return; }
+  panel.dataset.open='sup';
+  const h=supportInfo && supportInfo.hadith;
+  panel.innerHTML=`<div class="panel glass">
+    <h3>Support this work</h3>
+    ${h?`<div class="quote">${esc(h.text)}
+      <span class="src">${esc(h.citation)}</span></div>`:''}
+    <p class="lead">This site is free and always will be. Running it costs a
+      little for every question asked. If you would like to help it keep
+      going, any amount is welcome — and none is expected.</p>
+    <a class="give" href="${esc(supportInfo.url)}" target="_blank"
+       rel="noopener noreferrer">Give a gift</a>
+    <p class="note">Opens in a new tab. We never see your payment details.</p>
+  </div>`;
+};
+
 const out=document.getElementById('out'), qEl=document.getElementById('q'),
       go=document.getElementById('go'), bg=document.getElementById('bg'),
       glow=document.getElementById('glow');
 let lastQuestion='';
-const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 /* Parallax + cursor glow. Both are written to a rAF so a fast mouse cannot
    queue up more layout work than the browser can paint. */

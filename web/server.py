@@ -43,11 +43,19 @@ sys.path.insert(0, PROJECT_DIR)
 from citations import format_citation, verification_note      # noqa: E402
 from expansion import load_expansions                          # noqa: E402
 from hybrid_retrieve import HybridStore                        # noqa: E402
+from daily_hadith import hadith_for, SUPPORT_HADITH_ID          # noqa: E402
 
 FEEDBACK_PATH = os.path.join(PROJECT_DIR, "data", "feedback.jsonl")
 SHORTLIST = 10
 MAX_SHOWN = 3
 USE_RELEVANCE_CHECK = os.environ.get("HADITH_RELEVANCE_CHECK", "1") != "0"
+
+# Where the "support this work" button sends people. Deliberately NOT built
+# in: taking payments means an account in the owner's name, their identity
+# and their bank details. Set HADITH_SUPPORT_URL to a Ko-fi, Buy Me a Coffee,
+# PayPal.me or Stripe link. Until it is set, the button is hidden rather than
+# shown broken.
+SUPPORT_URL = os.environ.get("HADITH_SUPPORT_URL", "").strip()
 
 app = FastAPI(title="Hadith Search")
 STATE = {}
@@ -77,10 +85,13 @@ class SearchRequest(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    question: str
-    hadith_id: str
-    reason: str                      # one of the preset options
-    detail: Optional[str] = ""       # free text, optional
+    # hadith_id is optional: the same endpoint takes both "this result is
+    # wrong" reports and general feedback about the site, so there is one
+    # place to read everything people tell us.
+    question: Optional[str] = ""
+    hadith_id: Optional[str] = ""
+    reason: str
+    detail: Optional[str] = ""
 
 
 def _payload(hadith, score, why=None):
@@ -132,13 +143,38 @@ def search(req: SearchRequest):
     }
 
 
+@app.get("/api/daily")
+def daily():
+    """The hadith of the day. Same for everyone, changes at midnight."""
+    store = STATE["store"]
+    by_id = {h["id"]: h for h in store.hadiths}
+    rid = hadith_for()
+    hadith = by_id.get(rid)
+    if not hadith:
+        return {"hadith": None}
+    return {"date": time.strftime("%Y-%m-%d"), "hadith": _payload(hadith, 1.0)}
+
+
+@app.get("/api/support")
+def support():
+    """Whether a support link is configured, and the hadith shown with it."""
+    store = STATE["store"]
+    by_id = {h["id"]: h for h in store.hadiths}
+    hadith = by_id.get(SUPPORT_HADITH_ID)
+    return {
+        "url": SUPPORT_URL or None,
+        "hadith": _payload(hadith, 1.0) if hadith else None,
+    }
+
+
 @app.post("/api/feedback")
 def feedback(req: FeedbackRequest):
     record = {
         "id": uuid.uuid4().hex[:12],
         "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "question": req.question[:500],
-        "hadith_id": req.hadith_id[:64],
+        "question": (req.question or "")[:500],
+        "hadith_id": (req.hadith_id or "")[:64],
+        "kind": "result" if req.hadith_id else "general",
         "reason": req.reason[:64],
         "detail": (req.detail or "")[:1000],
     }

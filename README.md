@@ -24,11 +24,43 @@ scored **0.511** while the unrelated query "recipe for chicken biryani"
 scored **0.527** — the right answer scored *lower* than nonsense. No cut-off
 can separate those. Asking the question directly can, and does.
 
+## Hadith of the day
+
+The homepage shows one well-known hadith, chosen by the date so everyone
+sees the same one and it changes at midnight. The pool is a hand-picked set
+of 27 in `daily_hadith.py` — each checked to be self-contained, widely
+taught, and short enough to read in one sitting.
+
+It is deliberately **not** random from all 13,000 records. The daily hadith
+is served unprompted, with no question to justify it, so it has to be safe
+to meet cold on a homepage.
+
+## Supporting the work
+
+An optional "Support this work" button appears only when a payment link is
+configured:
+
+```bash
+export HADITH_SUPPORT_URL="https://ko-fi.com/yourname"
+```
+
+Payments are deliberately **not** built in — taking money needs an account
+in the owner's name with their own identity and bank details. The button
+simply links out to whatever service the owner has set up (Ko-fi, Buy Me a
+Coffee, PayPal.me, Stripe). No payment details ever reach this application.
+
+It is shown with *"Save yourself from Hell-fire even by giving half a
+date-fruit in charity"* (Bukhari 1417) — the point being that any amount
+counts, and none is expected.
+
 ## Reporting a wrong answer
 
 Every result has a **Report** button. It asks what went wrong — nothing to do
 with the question, related but doesn't answer it, there's a better-known
 hadith, the wording looks wrong, or something else — plus an optional note.
+
+There is also a general **Send feedback** button for anything not tied to a
+specific result.
 
 Reports are appended to `data/feedback.jsonl` and can be read at
 `/api/feedback`. They are the main way this improves: a reported answer
