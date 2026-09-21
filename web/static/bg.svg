@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"  stop-color="#0d3b5c"/>
+      <stop offset="55%" stop-color="#11557a"/>
+      <stop offset="100%" stop-color="#0a2e47"/>
+    </linearGradient>
+    <pattern id="star" width="120" height="120" patternUnits="userSpaceOnUse">
+      <g fill="none" stroke="#d9a93c" stroke-width="1.15" opacity=".85">
+        <!-- eight-point star (khatam), the classic girih motif -->
+        <path d="M60 8 L73 35 L102 35 L83 56 L92 84 L60 68 L28 84 L37 56 L18 35 L47 35 Z"/>
+        <path d="M60 18 L69 38 L91 38 L76 53 L83 74 L60 62 L37 74 L44 53 L29 38 L51 38 Z" opacity=".55"/>
+        <circle cx="60" cy="52" r="6" opacity=".5"/>
+        <path d="M0 60 L120 60 M60 0 L60 120" opacity=".18"/>
+        <path d="M0 0 L120 120 M120 0 L0 120" opacity=".12"/>
+      </g>
+      <g fill="#d9a93c" opacity=".14">
+        <circle cx="0"   cy="0"   r="3"/><circle cx="120" cy="0"   r="3"/>
+        <circle cx="0"   cy="120" r="3"/><circle cx="120" cy="120" r="3"/>
+      </g>
+    </pattern>
+  </defs>
+  <rect width="240" height="240" fill="url(#g)"/>
+  <rect width="240" height="240" fill="url(#star)"/>
+</svg>

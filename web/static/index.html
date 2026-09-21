@@ -5,187 +5,308 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hadith Search</title>
 <style>
+  /* To use a photograph instead of the woven pattern, change --bg-image
+     to url('your-photo.jpg'). Everything else adapts on its own. */
   :root{
-    --bg:#fbfaf7; --card:#fff; --ink:#1c1b18; --muted:#6b675e;
-    --line:#e6e2d9; --accent:#1f6f54; --accent-soft:#eaf3ef;
-    --warn:#8a6d3b; --warn-soft:#fdf6e6;
+    --bg-image: url('/static/bg.svg');
+    --bg-dim: .75;                 /* light mode: pattern stays visible */
+    --ink:#161512; --muted:#5f5b52;
+    --accent:#137a56; --accent-ink:#0b4b35;
+    --warn:#7a5c22;
+    --glass: rgba(255,255,255,.62);
+    --glass-edge: rgba(255,255,255,.85);
+    --glass-line: rgba(20,20,20,.10);
+    --shadow: 0 8px 28px rgba(18,28,24,.10);
   }
   @media (prefers-color-scheme: dark){
-    :root{ --bg:#16161a; --card:#1e1e23; --ink:#ece9e3; --muted:#a09b91;
-           --line:#2e2e35; --accent:#6ecfa8; --accent-soft:#1b2f28;
-           --warn:#d8b25f; --warn-soft:#2a2418; }
+    :root{
+      --bg-dim:.55;                /* dark mode: gold reads as texture */
+      --ink:#f0ede6; --muted:#a8a298;
+      --accent:#5fd3a6; --accent-ink:#8ee6c2;
+      --warn:#e0bb6a;
+      --glass: rgba(24,28,32,.55);
+      --glass-edge: rgba(255,255,255,.16);
+      --glass-line: rgba(255,255,255,.08);
+      --shadow: 0 10px 34px rgba(0,0,0,.42);
+    }
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-       font:16px/1.65 ui-serif,Georgia,"Times New Roman",serif;}
-  .wrap{max-width:760px;margin:0 auto;padding:32px 20px 80px}
-  header{text-align:center;margin-bottom:28px}
-  h1{font-size:28px;margin:0 0 6px;letter-spacing:-.01em}
-  .sub{color:var(--muted);font-size:14px;margin:0}
-  form{display:flex;gap:8px;margin:24px 0 8px}
-  input[type=text]{flex:1;padding:14px 16px;font-size:16px;font-family:inherit;
-    border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
-  input[type=text]:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
-  button{padding:14px 20px;font-size:15px;font-family:inherit;border:0;border-radius:10px;
-    background:var(--accent);color:#fff;cursor:pointer}
-  button:disabled{opacity:.55;cursor:default}
-  .examples{font-size:13px;color:var(--muted);margin-bottom:22px}
-  .examples button{background:none;border:0;color:var(--accent);padding:0 4px;
-    font-size:13px;cursor:pointer;text-decoration:underline;font-family:inherit}
-  .notice{background:var(--warn-soft);border:1px solid var(--line);border-left:3px solid var(--warn);
-    border-radius:8px;padding:12px 14px;font-size:13.5px;color:var(--ink);margin-bottom:22px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
-    padding:18px 20px;margin-bottom:14px}
-  .cite{font-size:13px;color:var(--accent);font-weight:600;margin-bottom:8px;font-family:system-ui,sans-serif}
+  html,body{height:100%}
+  body{
+    margin:0;color:var(--ink);overflow-x:hidden;
+    font:16px/1.68 ui-serif,Georgia,"Times New Roman",serif;
+    background:#0a2540;
+  }
+  /* --- background layer: sits behind everything, moves slower than content --- */
+  #bg{
+    position:fixed; inset:-8%; z-index:-2;
+    background-image:var(--bg-image);
+    background-size:260px 260px;
+    opacity:var(--bg-dim);
+    will-change:transform;
+    transition:opacity .4s ease;
+  }
+  #bg::after{ /* vignette so text never fights the pattern */
+    content:''; position:absolute; inset:0;
+    background:radial-gradient(ellipse at 50% 30%,
+      rgba(250,249,245,.30) 0%, rgba(250,249,245,.66) 55%, rgba(250,249,245,.88) 100%);
+  }
+  @media (prefers-color-scheme: dark){
+    #bg::after{background:radial-gradient(ellipse at 50% 30%,
+      rgba(8,14,20,.30) 0%, rgba(8,14,20,.62) 55%, rgba(8,14,20,.86) 100%);}
+  }
+  /* --- cursor glow --- */
+  #glow{
+    position:fixed; width:520px; height:520px; z-index:-1; pointer-events:none;
+    border-radius:50%; opacity:0; transition:opacity .5s ease;
+    background:radial-gradient(circle,
+      rgba(19,122,86,.16) 0%, rgba(19,122,86,.06) 40%, transparent 70%);
+    will-change:transform;
+  }
+  @media (prefers-color-scheme: dark){
+    #glow{background:radial-gradient(circle,
+      rgba(95,211,166,.13) 0%, rgba(95,211,166,.05) 40%, transparent 70%);}
+  }
+
+  .wrap{max-width:780px;margin:0 auto;padding:44px 20px 90px;position:relative}
+  header{text-align:center;margin-bottom:26px}
+  h1{font-size:31px;margin:0 0 7px;letter-spacing:-.015em;font-weight:600}
+  .sub{color:var(--muted);font-size:14.5px;margin:0}
+
+  /* --- the glass treatment --- */
+  .glass{
+    background:var(--glass);
+    -webkit-backdrop-filter:blur(24px) saturate(150%);
+    backdrop-filter:blur(24px) saturate(150%);
+    border:1px solid var(--glass-line);
+    border-top-color:var(--glass-edge);
+    border-radius:16px;
+    box-shadow:var(--shadow), inset 0 1px 0 var(--glass-edge);
+  }
+
+  .notice{padding:13px 16px;font-size:13.5px;margin-bottom:22px;
+    border-left:3px solid var(--warn)}
+  form{display:flex;gap:9px;margin:0 0 10px}
+  .field{flex:1;display:flex;padding:0}
+  input[type=text]{
+    flex:1;padding:15px 17px;font-size:16px;font-family:inherit;
+    border:0;background:transparent;color:var(--ink);border-radius:16px}
+  input[type=text]:focus{outline:none}
+  .field:focus-within{border-color:var(--accent);
+    box-shadow:var(--shadow),inset 0 1px 0 var(--glass-edge),0 0 0 3px rgba(19,122,86,.16)}
+  button{font-family:inherit;cursor:pointer;border:0}
+  #go{
+    padding:15px 24px;font-size:15px;border-radius:16px;color:#fff;
+    background:linear-gradient(180deg,var(--accent),var(--accent-ink));
+    box-shadow:0 4px 16px rgba(19,122,86,.32);
+    transition:transform .22s cubic-bezier(.34,1.56,.64,1), box-shadow .22s ease;}
+  #go:hover:not(:disabled){transform:translateY(-2px);
+    box-shadow:0 8px 24px rgba(19,122,86,.46)}
+  #go:active:not(:disabled){transform:translateY(0)}
+  #go:disabled{opacity:.5;cursor:default}
+
+  .examples{font-size:13px;color:var(--muted);margin-bottom:24px;
+    display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+  .chip{padding:6px 13px;border-radius:99px;font-size:12.5px;color:var(--ink);
+    font-family:system-ui,sans-serif;
+    transition:transform .22s cubic-bezier(.34,1.56,.64,1), box-shadow .22s ease}
+  .chip:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+
+  .card{padding:20px 22px;margin-bottom:15px;
+    animation:rise .55s cubic-bezier(.22,1,.36,1) both;
+    transition:transform .26s cubic-bezier(.34,1.56,.64,1), box-shadow .26s ease,
+               border-top-color .26s ease}
+  .card:hover{transform:translateY(-2px);
+    border-top-color:var(--accent);
+    box-shadow:0 14px 38px rgba(18,28,24,.16), inset 0 1px 0 var(--glass-edge)}
+  @keyframes rise{from{opacity:0;transform:translateY(22px) scale(.985)}
+                  to{opacity:1;transform:translateY(0) scale(1)}}
+
+  .cite{font-size:13px;color:var(--accent-ink);font-weight:700;margin-bottom:8px;
+    font-family:system-ui,sans-serif;letter-spacing:.005em}
+  @media (prefers-color-scheme: dark){ .cite{color:var(--accent-ink)} }
+  .why{font-size:12.5px;color:var(--muted);font-style:italic;margin-bottom:9px;
+    font-family:system-ui,sans-serif}
   .narr{font-size:13.5px;color:var(--muted);margin-bottom:6px}
   .text{white-space:pre-wrap}
-  .meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
-    margin-top:14px;padding-top:12px;border-top:1px solid var(--line);
+  .meta{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-top:15px;
+    padding-top:13px;border-top:1px solid var(--glass-line);
     font-size:12px;color:var(--muted);font-family:system-ui,sans-serif}
-  .badge{padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent)}
-  .badge.single{background:var(--warn-soft);color:var(--warn)}
-  .report{margin-left:auto;background:none;border:1px solid var(--line);color:var(--muted);
-    padding:5px 11px;font-size:12px;border-radius:99px;font-family:system-ui,sans-serif}
-  .report:hover{border-color:var(--warn);color:var(--warn)}
-  .fb{margin-top:12px;padding:14px;border:1px dashed var(--line);border-radius:10px;
-    font-family:system-ui,sans-serif;font-size:13.5px}
+  .badge{padding:4px 11px;border-radius:99px;font-size:11.5px;
+    background:rgba(19,122,86,.13);color:var(--accent-ink);
+    border:1px solid rgba(19,122,86,.22);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  .badge.single{background:rgba(122,92,34,.13);color:var(--warn);
+    border-color:rgba(122,92,34,.24)}
+  .report{margin-left:auto;padding:6px 13px;font-size:12px;border-radius:99px;
+    background:transparent;border:1px solid var(--glass-line);color:var(--muted);
+    font-family:system-ui,sans-serif;transition:all .22s ease}
+  .report:hover{border-color:var(--warn);color:var(--warn);transform:translateY(-1px)}
+
+  .fb{margin-top:13px;padding:15px;border-radius:13px;
+    border:1px dashed var(--glass-line);font-family:system-ui,sans-serif;font-size:13.5px;
+    animation:rise .34s cubic-bezier(.22,1,.36,1) both}
   .fb p{margin:0 0 10px;font-weight:600}
-  .fb label{display:block;margin:6px 0;cursor:pointer;font-weight:400}
-  .fb textarea{width:100%;margin-top:8px;padding:9px;border:1px solid var(--line);
-    border-radius:8px;font:inherit;background:var(--bg);color:var(--ink);resize:vertical}
-  .fb .row{display:flex;gap:8px;margin-top:10px}
-  .fb .cancel{background:none;border:1px solid var(--line);color:var(--muted)}
-  .empty{text-align:center;padding:36px 20px;color:var(--muted)}
-  .status{text-align:center;color:var(--muted);padding:24px;font-size:14px}
-  .thanks{color:var(--accent);font-size:13px;margin-top:10px;font-family:system-ui,sans-serif}
-  footer{margin-top:48px;text-align:center;font-size:12.5px;color:var(--muted);
-    font-family:system-ui,sans-serif;line-height:1.7}
+  .fb label{display:block;margin:7px 0;cursor:pointer;font-weight:400}
+  .fb textarea{width:100%;margin-top:9px;padding:10px;border-radius:10px;
+    border:1px solid var(--glass-line);font:inherit;resize:vertical;
+    background:rgba(255,255,255,.35);color:var(--ink)}
+  @media (prefers-color-scheme: dark){.fb textarea{background:rgba(0,0,0,.25)}}
+  .fb .row{display:flex;gap:9px;margin-top:11px}
+  .fb .send{padding:9px 16px;border-radius:10px;color:#fff;
+    background:linear-gradient(180deg,var(--accent),var(--accent-ink))}
+  .fb .cancel{padding:9px 16px;border-radius:10px;background:transparent;
+    border:1px solid var(--glass-line);color:var(--muted)}
+  .empty,.status{text-align:center;padding:34px 22px;color:var(--muted);
+    animation:rise .45s cubic-bezier(.22,1,.36,1) both}
+  .thanks{color:var(--accent-ink);font-size:13px;font-family:system-ui,sans-serif}
+  .spinner{display:inline-block;width:15px;height:15px;margin-right:9px;
+    border:2px solid var(--glass-line);border-top-color:var(--accent);
+    border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  footer{margin-top:52px;text-align:center;font-size:12.5px;color:var(--muted);
+    font-family:system-ui,sans-serif;line-height:1.8}
+
+  /* Anyone who asks their system to reduce motion gets none of it. */
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.01ms!important;
+      animation-iteration-count:1!important;transition-duration:.01ms!important}
+    #bg,#glow{transform:none!important}
+    #glow{display:none}
+  }
 </style>
 </head>
 <body>
+<div id="bg"></div>
+<div id="glow"></div>
+
 <div class="wrap">
   <header>
     <h1>Hadith Search</h1>
     <p class="sub">Ask a question in your own words. Answers come only from Sahih al-Bukhari and Sahih Muslim.</p>
   </header>
 
-  <div class="notice">
+  <div class="notice glass">
     <strong>This is an early trial.</strong> Some answers will be wrong or incomplete.
     If something looks wrong, please press <em>Report</em> on it and tell us why — that is
     how we fix it. Nothing here replaces asking a qualified scholar.
   </div>
 
   <form id="f">
-    <input type="text" id="q" placeholder="e.g. how should I treat my parents"
-           autocomplete="off" autofocus>
+    <span class="field glass"><input type="text" id="q"
+      placeholder="e.g. how should I treat my parents" autocomplete="off" autofocus></span>
     <button type="submit" id="go">Search</button>
   </form>
-  <div class="examples">Try:
-    <button type="button" data-q="how should I treat my parents">treating parents</button>·
-    <button type="button" data-q="is it okay to be angry">anger</button>·
-    <button type="button" data-q="what is the best time to pray Tahajjud">Tahajjud timing</button>·
-    <button type="button" data-q="what does Islam say about lying">lying</button>
+  <div class="examples">
+    <span>Try:</span>
+    <button type="button" class="chip glass" data-q="how should I treat my parents">treating parents</button>
+    <button type="button" class="chip glass" data-q="is it okay to be angry">anger</button>
+    <button type="button" class="chip glass" data-q="what is the best time to pray Tahajjud">Tahajjud timing</button>
+    <button type="button" class="chip glass" data-q="what does Islam say about lying">lying</button>
   </div>
 
   <div id="out"></div>
 
   <footer>
-    Sahih al-Bukhari and Sahih Muslim · every result links to its reference so you can verify it<br>
+    Sahih al-Bukhari and Sahih Muslim · every result carries its reference so you can verify it<br>
     Not a substitute for scholarly guidance.
   </footer>
 </div>
 
 <script>
 const REASONS = [
-  ["unrelated",  "This hadith has nothing to do with my question"],
-  ["partial",    "Related, but it does not answer what I asked"],
-  ["better",     "There is a better-known hadith for this"],
-  ["wording",    "The text or translation looks wrong"],
-  ["other",      "Something else"]
+  ["unrelated","This hadith has nothing to do with my question"],
+  ["partial","Related, but it does not answer what I asked"],
+  ["better","There is a better-known hadith for this"],
+  ["wording","The text or translation looks wrong"],
+  ["other","Something else"]
 ];
-const out = document.getElementById('out');
-const qEl = document.getElementById('q');
-const go  = document.getElementById('go');
-let lastQuestion = '';
+const out=document.getElementById('out'), qEl=document.getElementById('q'),
+      go=document.getElementById('go'), bg=document.getElementById('bg'),
+      glow=document.getElementById('glow');
+let lastQuestion='';
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-function esc(s){ return (s||'').replace(/[&<>"]/g, c =>
-  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+/* Parallax + cursor glow. Both are written to a rAF so a fast mouse cannot
+   queue up more layout work than the browser can paint. */
+let mx=0,my=0,pending=false;
+addEventListener('mousemove',e=>{
+  mx=e.clientX; my=e.clientY;
+  glow.style.opacity='1';
+  if(!pending){ pending=true; requestAnimationFrame(apply); }
+},{passive:true});
+function apply(){
+  pending=false;
+  const dx=(mx/innerWidth-.5), dy=(my/innerHeight-.5);
+  bg.style.transform=`translate3d(${dx*-26}px, ${dy*-26}px, 0)`;   /* slower than content */
+  glow.style.transform=`translate3d(${mx-260}px, ${my-260}px, 0)`;
+}
+addEventListener('mouseleave',()=>glow.style.opacity='0');
 
-document.querySelectorAll('.examples button').forEach(b =>
-  b.onclick = () => { qEl.value = b.dataset.q; document.getElementById('f')
-    .dispatchEvent(new Event('submit',{cancelable:true})); });
+document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
+  qEl.value=b.dataset.q;
+  document.getElementById('f').dispatchEvent(new Event('submit',{cancelable:true}));
+});
 
-document.getElementById('f').onsubmit = async (e) => {
+document.getElementById('f').onsubmit=async e=>{
   e.preventDefault();
-  const question = qEl.value.trim();
-  if(!question) return;
-  lastQuestion = question;
-  go.disabled = true;
-  out.innerHTML = '<div class="status">Searching…</div>';
+  const question=qEl.value.trim(); if(!question) return;
+  lastQuestion=question; go.disabled=true;
+  out.innerHTML='<div class="status glass"><span class="spinner"></span>Searching…</div>';
   try{
-    const r = await fetch('/api/search', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({question})
-    });
-    if(!r.ok){ const err = await r.json().catch(()=>({}));
-      throw new Error(err.detail || 'Something went wrong.'); }
+    const r=await fetch('/api/search',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({question})});
+    if(!r.ok){const err=await r.json().catch(()=>({}));
+      throw new Error(err.detail||'Something went wrong.');}
     render(await r.json());
   }catch(err){
-    out.innerHTML = '<div class="status">'+esc(err.message)+'</div>';
-  }finally{ go.disabled = false; }
+    out.innerHTML='<div class="status glass">'+esc(err.message)+'</div>';
+  }finally{ go.disabled=false; }
 };
 
 function render(data){
   if(!data.results.length){
-    out.innerHTML = '<div class="empty"><p><strong>No clear answer found.</strong></p>'+
+    out.innerHTML='<div class="empty glass"><p><strong>No clear answer found.</strong></p>'+
       '<p>Try rephrasing it, or asking about something more specific.<br>'+
       'Check the spelling of any Arabic words too.</p></div>';
     return;
   }
-  out.innerHTML = data.results.map((h,i) => `
-    <div class="card" data-id="${esc(h.id)}">
+  out.innerHTML=data.results.map((h,i)=>`
+    <div class="card glass" data-id="${esc(h.id)}" style="animation-delay:${i*120}ms">
       <div class="cite">${esc(h.citation)}</div>
-      ${h.narrator ? `<div class="narr">Narrated ${esc(h.narrator)}</div>` : ''}
+      ${h.why?`<div class="why">${esc(h.why)}</div>`:''}
+      ${h.narrator?`<div class="narr">Narrated ${esc(h.narrator)}</div>`:''}
       <div class="text">${esc(h.text)}</div>
       <div class="meta">
-        <span class="badge ${h.cross_checked ? '' : 'single'}">
-          ${h.cross_checked ? 'Checked against a second source' : 'Single source'}
-        </span>
-        <button class="report" data-i="${i}">Report</button>
+        <span class="badge ${h.cross_checked?'':'single'}">
+          ${h.cross_checked?'Checked against a second source':'Single source'}</span>
+        <button class="report">Report</button>
       </div>
       <div class="fbslot"></div>
     </div>`).join('');
 
-  out.querySelectorAll('.report').forEach(btn => btn.onclick = () => {
-    const card = btn.closest('.card');
-    const slot = card.querySelector('.fbslot');
-    if(slot.innerHTML){ slot.innerHTML=''; return; }
-    slot.innerHTML = `
-      <div class="fb">
+  out.querySelectorAll('.report').forEach(btn=>btn.onclick=()=>{
+    const card=btn.closest('.card'), slot=card.querySelector('.fbslot');
+    if(slot.innerHTML){slot.innerHTML='';return;}
+    slot.innerHTML=`<div class="fb">
         <p>What is wrong with this one?</p>
-        ${REASONS.map(([v,l],n)=>`<label>
-          <input type="radio" name="r-${esc(card.dataset.id)}" value="${v}" ${n===0?'checked':''}>
-          ${esc(l)}</label>`).join('')}
+        ${REASONS.map(([v,l],n)=>`<label><input type="radio"
+          name="r-${esc(card.dataset.id)}" value="${v}" ${n===0?'checked':''}> ${esc(l)}</label>`).join('')}
         <textarea rows="2" placeholder="Anything else we should know (optional)"></textarea>
-        <div class="row">
-          <button class="send">Send report</button>
-          <button class="cancel">Cancel</button>
-        </div>
-      </div>`;
-    slot.querySelector('.cancel').onclick = () => slot.innerHTML='';
-    slot.querySelector('.send').onclick = async () => {
-      const reason = slot.querySelector('input[type=radio]:checked').value;
-      const detail = slot.querySelector('textarea').value;
-      slot.querySelector('.send').disabled = true;
+        <div class="row"><button class="send">Send report</button>
+        <button class="cancel">Cancel</button></div></div>`;
+    slot.querySelector('.cancel').onclick=()=>slot.innerHTML='';
+    slot.querySelector('.send').onclick=async()=>{
+      const reason=slot.querySelector('input[type=radio]:checked').value;
+      const detail=slot.querySelector('textarea').value;
+      slot.querySelector('.send').disabled=true;
       try{
         await fetch('/api/feedback',{method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({question:lastQuestion, hadith_id:card.dataset.id,
-                                reason, detail})});
-        slot.innerHTML = '<div class="thanks">Thank you — this has been recorded '+
-                         'and will be looked at.</div>';
+          body:JSON.stringify({question:lastQuestion,hadith_id:card.dataset.id,reason,detail})});
+        slot.innerHTML='<div class="fb thanks">Thank you — this has been recorded and will be looked at.</div>';
       }catch(e){
-        slot.innerHTML = '<div class="thanks">Could not send that. Please try again.</div>';
+        slot.innerHTML='<div class="fb thanks">Could not send that. Please try again.</div>';
       }
     };
   });
