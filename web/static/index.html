@@ -4,23 +4,30 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hadith Search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Amiri is a revival of classical Naskh, designed for Arabic typesetting;
+     its Latin has the same calligraphic pedigree, which suits this text far
+     better than a default system serif. Marcellus gives the headings an
+     inscriptional, carved feel that echoes the lattice behind them. -->
+<link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Marcellus&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   /* To use a photograph instead of the woven pattern, change --bg-image
      to url('your-photo.jpg'). Everything else adapts on its own. */
   :root{
     --bg-image: url('/static/bg-photo.jpg');
-    --bg-dim: .30;                 /* photo is already dark; barely dim it */
+    --bg-dim: .85;                 /* photo is already dark; barely dim it */
     --ink:#f2efe8; --muted:#b3ada2;
     --accent:#3fbf8f; --accent-ink:#8fe3c0;
     --warn:#e0bb6a;
-    --glass: rgba(22,30,40,.46);
+    --glass: rgba(14,22,33,.72);
     --glass-edge: rgba(255,255,255,.20);
     --glass-line: rgba(255,255,255,.10);
     --shadow: 0 10px 34px rgba(0,0,0,.45);
   }
   @media (prefers-color-scheme: dark){
     :root{
-      --bg-dim:.22;                /* photo is already dark */
+      --bg-dim:.80;                /* photo is already dark */
       --ink:#f0ede6; --muted:#a8a298;
       --accent:#5fd3a6; --accent-ink:#8ee6c2;
       --warn:#e0bb6a;
@@ -34,7 +41,7 @@
   html,body{height:100%}
   body{
     margin:0;color:var(--ink);overflow-x:hidden;
-    font:16px/1.68 ui-serif,Georgia,"Times New Roman",serif;
+    font:17px/1.75 "Amiri",ui-serif,Georgia,"Times New Roman",serif;
     background:#0a2540;
   }
   /* --- background layer: sits behind everything, moves slower than content --- */
@@ -51,7 +58,7 @@
     background-position:center;
     background-repeat:no-repeat;
     background-color:#0b1420;
-    filter:blur(1.5px) saturate(.75);
+    filter:saturate(.9) contrast(1.05);
     background-color:#0b1622;
     opacity:var(--bg-dim);
     will-change:transform;
@@ -60,11 +67,11 @@
   #bg::after{ /* vignette so text never fights the pattern */
     content:''; position:absolute; inset:0;
     background:radial-gradient(ellipse at 50% 30%,
-      rgba(10,18,28,.10) 0%, rgba(10,18,28,.42) 55%, rgba(10,18,28,.72) 100%);
+      rgba(9,16,26,.05) 0%, rgba(9,16,26,.20) 55%, rgba(9,16,26,.42) 100%);
   }
   @media (prefers-color-scheme: dark){
     #bg::after{background:radial-gradient(ellipse at 50% 30%,
-      rgba(6,12,20,.18) 0%, rgba(6,12,20,.48) 55%, rgba(6,12,20,.78) 100%);}
+      rgba(5,11,19,.08) 0%, rgba(5,11,19,.26) 55%, rgba(5,11,19,.50) 100%);}
   }
   /* --- cursor glow --- */
   #glow{
@@ -80,15 +87,19 @@
   }
 
   .wrap{max-width:780px;margin:0 auto;padding:44px 20px 90px;position:relative}
-  header{text-align:center;margin-bottom:26px}
-  h1{font-size:31px;margin:0 0 7px;letter-spacing:-.015em;font-weight:600}
-  .sub{color:var(--muted);font-size:14.5px;margin:0}
+  header{text-align:center;margin-bottom:26px;position:relative;padding:14px 18px 18px}
+  header::before{content:'';position:absolute;inset:-18px -10% -6px;z-index:-1;
+    background:radial-gradient(ellipse at 50% 45%,
+      rgba(7,13,22,.86) 0%, rgba(7,13,22,.62) 55%, rgba(7,13,22,0) 100%)}
+  h1{text-shadow:0 2px 18px rgba(7,13,22,.75);font-family:"Marcellus",ui-serif,Georgia,serif;font-size:37px;margin:0 0 9px;
+     letter-spacing:.012em;font-weight:400}
+  .sub{color:var(--muted);font-size:14.5px;margin:0;font-family:"Inter",system-ui,sans-serif}
 
   /* --- the glass treatment --- */
   .glass{
     background:var(--glass);
-    -webkit-backdrop-filter:blur(24px) saturate(150%);
-    backdrop-filter:blur(24px) saturate(150%);
+    -webkit-backdrop-filter:blur(28px) saturate(140%);
+    backdrop-filter:blur(28px) saturate(140%);
     border:1px solid var(--glass-line);
     border-top-color:var(--glass-edge);
     border-radius:16px;
@@ -100,13 +111,14 @@
   form{display:flex;gap:9px;margin:0 0 10px}
   .field{flex:1;display:flex;padding:0}
   input[type=text]{
-    flex:1;padding:15px 17px;font-size:16px;font-family:inherit;
+    flex:1;padding:15px 17px;font-size:16px;font-family:"Inter",system-ui,sans-serif;
     border:0;background:transparent;color:var(--ink);border-radius:16px}
   input[type=text]:focus{outline:none}
   .field:focus-within{border-color:var(--accent);
     box-shadow:var(--shadow),inset 0 1px 0 var(--glass-edge),0 0 0 3px rgba(19,122,86,.16)}
   button{font-family:inherit;cursor:pointer;border:0}
   #go{
+    font-family:"Inter",system-ui,sans-serif;font-weight:500;
     padding:15px 24px;font-size:15px;border-radius:16px;color:#fff;
     background:linear-gradient(180deg,var(--accent),var(--accent-ink));
     box-shadow:0 4px 16px rgba(19,122,86,.32);
@@ -117,9 +129,10 @@
   #go:disabled{opacity:.5;cursor:default}
 
   .examples{font-size:13px;color:var(--muted);margin-bottom:24px;
+    text-shadow:0 1px 6px rgba(7,13,22,.9);
     display:flex;flex-wrap:wrap;gap:7px;align-items:center}
   .chip{padding:6px 13px;border-radius:99px;font-size:12.5px;color:var(--ink);
-    font-family:system-ui,sans-serif;
+    font-family:'Inter',system-ui,sans-serif;
     transition:transform .22s cubic-bezier(.34,1.56,.64,1), box-shadow .22s ease}
   .chip:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
 
@@ -134,15 +147,15 @@
                   to{opacity:1;transform:translateY(0) scale(1)}}
 
   .cite{font-size:13px;color:var(--accent-ink);font-weight:700;margin-bottom:8px;
-    font-family:system-ui,sans-serif;letter-spacing:.005em}
+    font-family:'Inter',system-ui,sans-serif;letter-spacing:.005em}
   @media (prefers-color-scheme: dark){ .cite{color:var(--accent-ink)} }
   .why{font-size:12.5px;color:var(--muted);font-style:italic;margin-bottom:9px;
-    font-family:system-ui,sans-serif}
+    font-family:'Inter',system-ui,sans-serif}
   .narr{font-size:13.5px;color:var(--muted);margin-bottom:6px}
-  .text{white-space:pre-wrap}
+  .text{white-space:pre-wrap;font-size:17.5px;line-height:1.78}
   .meta{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-top:15px;
     padding-top:13px;border-top:1px solid var(--glass-line);
-    font-size:12px;color:var(--muted);font-family:system-ui,sans-serif}
+    font-size:12px;color:var(--muted);font-family:'Inter',system-ui,sans-serif}
   .badge{padding:4px 11px;border-radius:99px;font-size:11.5px;
     background:rgba(19,122,86,.13);color:var(--accent-ink);
     border:1px solid rgba(19,122,86,.22);
@@ -151,11 +164,11 @@
     border-color:rgba(122,92,34,.24)}
   .report{margin-left:auto;padding:6px 13px;font-size:12px;border-radius:99px;
     background:transparent;border:1px solid var(--glass-line);color:var(--muted);
-    font-family:system-ui,sans-serif;transition:all .22s ease}
+    font-family:'Inter',system-ui,sans-serif;transition:all .22s ease}
   .report:hover{border-color:var(--warn);color:var(--warn);transform:translateY(-1px)}
 
   .fb{margin-top:13px;padding:15px;border-radius:13px;
-    border:1px dashed var(--glass-line);font-family:system-ui,sans-serif;font-size:13.5px;
+    border:1px dashed var(--glass-line);font-family:'Inter',system-ui,sans-serif;font-size:13.5px;
     animation:rise .34s cubic-bezier(.22,1,.36,1) both}
   .fb p{margin:0 0 10px;font-weight:600}
   .fb label{display:block;margin:7px 0;cursor:pointer;font-weight:400}
@@ -170,13 +183,17 @@
     border:1px solid var(--glass-line);color:var(--muted)}
   .empty,.status{text-align:center;padding:34px 22px;color:var(--muted);
     animation:rise .45s cubic-bezier(.22,1,.36,1) both}
-  .thanks{color:var(--accent-ink);font-size:13px;font-family:system-ui,sans-serif}
+  .thanks{color:var(--accent-ink);font-size:13px;font-family:'Inter',system-ui,sans-serif}
   .spinner{display:inline-block;width:15px;height:15px;margin-right:9px;
     border:2px solid var(--glass-line);border-top-color:var(--accent);
     border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px}
   @keyframes spin{to{transform:rotate(360deg)}}
-  footer{margin-top:52px;text-align:center;font-size:12.5px;color:var(--muted);
-    font-family:system-ui,sans-serif;line-height:1.8}
+  footer{margin-top:52px;text-align:center;position:relative;padding:16px 10px}
+  footer::before{content:'';position:absolute;inset:-6px -10%;z-index:-1;
+    background:radial-gradient(ellipse at 50% 50%,
+      rgba(7,13,22,.80) 0%, rgba(7,13,22,.50) 60%, rgba(7,13,22,0) 100%)}
+  footer{font-size:12.5px;color:var(--muted);
+    font-family:'Inter',system-ui,sans-serif;line-height:1.8}
 
   /* Anyone who asks their system to reduce motion gets none of it. */
   @media (prefers-reduced-motion: reduce){
