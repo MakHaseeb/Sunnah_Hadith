@@ -126,7 +126,7 @@ answers to, and fails loudly if they change:
 
 ```bash
 python3 healthcheck.py --quiet          # free — run hourly
-python3 healthcheck.py --quiet --full   # ~$0.01 — run once or twice a day
+python3 healthcheck.py --quiet --full   # ~$0.01 — run once a day
 ```
 
 **Two modes, because the checks cost very differently.** Every check that
@@ -138,6 +138,9 @@ month, on a site with no users.
 |---|---|---|
 | `--quick` (default) | **free** | site responds, corpus loaded, daily hadith resolves, relevance check still switched on |
 | `--full` | ~$0.01 a run | all of the above, plus four known questions returning the right hadith and two nonsense queries still refused |
+
+Hourly quick checks cost nothing. One full check a day is **$0.29/month** —
+the entire monitoring bill.
 
 Checking whether the relevance check is *enabled* is free — it is read from
 config, not by asking the model. So the hourly run still catches the most
@@ -155,8 +158,8 @@ Run it hourly:
 ```
 # hourly, free
 0 * * * * cd /path/to/app && python3 healthcheck.py --quiet --base https://yoursite || echo "hadith app DOWN"
-# twice a day, ~$0.60/month, catches answers quietly getting worse
-0 6,18 * * * cd /path/to/app && python3 healthcheck.py --quiet --full --base https://yoursite || echo "hadith app ANSWERS WRONG"
+# once a day, ~$0.29/month, catches answers quietly getting worse
+0 6 * * * cd /path/to/app && python3 healthcheck.py --quiet --full --base https://yoursite || echo "hadith app ANSWERS WRONG"
 ```
 
 ## Reporting a wrong answer

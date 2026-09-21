@@ -40,8 +40,8 @@ So the checks are split by what they cost:
 
   --full              ~$0.01 a run. Everything above plus the known-answer
                       and rejection checks, which are the only way to catch
-                      answers quietly getting worse. Run once or twice a
-                      day.
+                      answers quietly getting worse. Run once a day --
+                      $0.29 a month, the entire monitoring bill.
 
 Checking whether the relevance check is ENABLED is free -- that is read
 from config, not by asking the model. So the hourly run still catches the
@@ -176,8 +176,9 @@ if __name__ == "__main__":
     ap.add_argument("--quiet", action="store_true",
                     help="print only on failure — the right mode for cron")
     ap.add_argument("--full", action="store_true",
-                    help="also verify known answers (~$0.01 a run). Without "
-                         "this only the free checks run.")
+                    help="also verify known answers (~$0.01 a run, so about "
+                         "$0.29/month daily). Without this only the free "
+                         "checks run.")
     args = ap.parse_args()
 
     started = time.strftime("%Y-%m-%d %H:%M:%S")
