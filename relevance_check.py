@@ -99,10 +99,21 @@ def make_client():
     return anthropic.Anthropic()
 
 
+class Unavailable(Exception):
+    """The relevance check could not run -- no credit, rate limited, network
+    down. Distinct from 'the model said no': the caller must be able to tell
+    'this hadith does not answer the question' from 'we could not ask'."""
+
+
 def check(question, candidates, client=None, model=MODEL):
     """
     candidates: [(hadith, score)]. Returns (verdicts, usage).
     A verdict is {"answers": bool, "why": str} aligned to candidates.
+
+    Raises Unavailable if the call itself could not be made. Returning
+    "nothing answers this" in that case would be a lie that looks exactly
+    like a confident refusal -- the user would be told no hadith addresses
+    their question when in truth nobody looked.
     """
     if not candidates:
         return [], None
@@ -113,7 +124,10 @@ def check(question, candidates, client=None, model=MODEL):
     if model.startswith("claude-opus") or model.startswith("claude-sonnet-5"):
         kwargs["thinking"] = {"type": "adaptive"}
         kwargs["output_config"] = {"effort": "low"}
-    resp = client.messages.create(**kwargs)
+    try:
+        resp = client.messages.create(**kwargs)
+    except Exception as e:
+        raise Unavailable(str(e)) from e
     if resp.stop_reason == "refusal":
         return [{"answers": False, "why": "refused"} for _ in candidates], resp.usage
     text = "".join(b.text for b in resp.content if b.type == "text")
@@ -121,8 +135,13 @@ def check(question, candidates, client=None, model=MODEL):
 
 
 def filter_relevant(question, retrieved, client=None, model=MODEL, k=SHORTLIST):
-    """Return only the retrieved items the model says actually answer the
-    question, preserving retrieval order."""
+    """
+    Return only the retrieved items the model says actually answer the
+    question, preserving retrieval order.
+
+    Propagates Unavailable so the caller can fall back to plain search
+    rather than showing the user an error page.
+    """
     short = retrieved[:k]
     pairs = [(item[0], item[4]) for item in short]
     verdicts, usage = check(question, pairs, client=client, model=model)

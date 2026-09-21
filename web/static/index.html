@@ -671,7 +671,14 @@ function render(data){
     return;
   }
   shownIds=data.results.map(h=>h.id);
-  out.innerHTML=data.results.map((h,i)=>cardHTML(h,i)).join('');
+  const warn = data.degraded
+    ? `<div class="status glass" style="text-align:left;padding:13px 17px;font-size:15px">
+         <strong>Showing unchecked results.</strong> The step that works out
+         which hadith actually answer your question is unavailable right now,
+         so these are the closest matches by wording alone — some may not be
+         relevant. Please read the citations carefully.
+       </div>` : '';
+  out.innerHTML = warn + data.results.map((h,i)=>cardHTML(h,i)).join('');
   wireCards();
 }
 

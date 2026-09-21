@@ -135,25 +135,39 @@ def search(req: SearchRequest):
         return {"results": [], "checked": False}
 
     client = STATE.get("client")
+    degraded = False
+
     if not client:
         chosen = [(item, None) for item in retrieved[:MAX_SHOWN]]
     else:
-        from relevance_check import filter_relevant
-        keep, verdicts, _usage = filter_relevant(
-            question, retrieved, client=client, k=SHORTLIST)
-        keep_ids = {id(k) for k in keep}
-        chosen = [(item, v) for item, v in zip(retrieved, verdicts)
-                  if id(item) in keep_ids]
-        # Shortest first: a long narration that wanders through several
-        # subjects is a worse answer than a short one stating the ruling.
-        chosen.sort(key=lambda pair: len(pair[0][0]["text"].split()))
-        chosen = chosen[:MAX_SHOWN]
+        from relevance_check import filter_relevant, Unavailable
+        try:
+            keep, verdicts, _usage = filter_relevant(
+                question, retrieved, client=client, k=SHORTLIST)
+            keep_ids = {id(k) for k in keep}
+            chosen = [(item, v) for item, v in zip(retrieved, verdicts)
+                      if id(item) in keep_ids]
+            # Shortest first: a long narration that wanders through several
+            # subjects is a worse answer than a short one stating the ruling.
+            chosen.sort(key=lambda pair: len(pair[0][0]["text"].split()))
+            chosen = chosen[:MAX_SHOWN]
+        except Unavailable as e:
+            # No credit, rate limited, or the network is down. Fall back to
+            # plain search rather than an error page: the search itself is
+            # local and free, so the site can still be useful -- just less
+            # accurate. The page is told so it can say as much, because
+            # quietly serving worse results would be the wrong kind of
+            # failure for this app.
+            print(f"  relevance check unavailable: {str(e)[:160]}")
+            degraded = True
+            chosen = [(item, None) for item in retrieved[:MAX_SHOWN]]
 
     analytics.record("answered" if chosen else "no_answer", req.visitor)
     return {
         "results": [_payload(item[0], item[4], (v or {}).get("why"))
                     for item, v in chosen],
-        "checked": bool(client),
+        "checked": bool(client) and not degraded,
+        "degraded": degraded,
     }
 
 
