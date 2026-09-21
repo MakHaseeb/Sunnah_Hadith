@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 # Push this project to a Hugging Face Space.
 #
-# The Space needs a README.md carrying a metadata header that GitHub does not
-# want, so the Space gets its own copy on a throwaway branch. Your GitHub
-# README is left alone.
+# The Space gets a SINGLE COMMIT with no history. Two reasons:
 #
-# Whatever happens -- success, failure, Ctrl+C -- the trap below puts you back
-# on main with the right README. An earlier version exited on a failed push
-# and left the repo stranded on the deploy branch.
+#   1. Hugging Face rejects binary files in a plain git push and wants Git
+#      LFS for them. The background photograph is the only binary here, and
+#      requiring an extra tool for one image is a poor trade -- so it is left
+#      out and the Dockerfile fetches it from the public GitHub repo while
+#      building. Removing it from the latest commit alone was NOT enough:
+#      Hugging Face scans every commit being pushed, and found it in the
+#      commit that originally added it.
+#
+#   2. The Space has no use for the project history anyway, and the push is
+#      far smaller without it.
+#
+# Your GitHub branch and README are left untouched whatever happens.
 set -euo pipefail
 
 SPACE="${1:-}"
@@ -17,8 +24,7 @@ usage: ./deploy_to_hf.sh <hf-username>/<space-name>
 
   example: ./deploy_to_hf.sh haseebahmed0806/hadith-search
 
-  Replace the whole thing with your real username and Space name -- do not
-  paste the placeholder.
+  Use your real username and Space name -- do not paste the placeholder.
 USAGE
   exit 1
 fi
@@ -48,38 +54,40 @@ if ! curl -sf -o /dev/null "https://huggingface.co/spaces/$SPACE"; then
   exit 1
 fi
 
-echo "==> preparing a deploy branch"
+echo "==> building a single-commit snapshot (no history)"
 git branch -D hf-deploy >/dev/null 2>&1 || true
-git checkout -q -b hf-deploy
+git checkout -q --orphan hf-deploy
+git reset -q                                  # unstage everything inherited
 
 echo "==> swapping in the Space README"
 cp README.md README_GITHUB.md
 cp README_SPACE.md README.md
-git add README.md README_GITHUB.md
 
-# Hugging Face refuses binary files in a plain git push and wants Git LFS
-# for them. Rather than require an extra tool for a single image, the photo
-# is left out of the push entirely -- the Dockerfile fetches it from the
-# public GitHub repo while building.
-echo "==> removing the background image (fetched at build time instead)"
-git rm -q --cached web/static/bg-photo.jpg 2>/dev/null || true
-echo "web/static/bg-photo.jpg" >> .gitignore
-git add .gitignore
+echo "==> leaving the background image out (fetched during the build)"
+git add -A
+git rm -q --cached web/static/bg-photo.jpg README_GITHUB.md 2>/dev/null || true
+git commit -q -m "Hadith Search — deployed from github.com/MakHaseeb/Sunnah_Hadith"
 
-git commit -q -m "Space metadata header; background fetched during build"
+# Refuse to push if any binary slipped through, rather than discovering it
+# from a rejected push.
+if git ls-files -z | xargs -0 -I{} sh -c 'head -c 8000 "{}" | grep -qP "\x00" && echo "{}"' 2>/dev/null | grep -q .; then
+  echo "A binary file is still staged. Aborting before the push."
+  git ls-files -z | xargs -0 -I{} sh -c 'head -c 8000 "{}" | grep -qP "\x00" && echo "  {}"' 2>/dev/null
+  exit 1
+fi
+echo "    snapshot: $(git ls-files | wc -l | tr -d ' ') files, $(git rev-list --count HEAD) commit, no binaries"
 
 echo "==> pushing to https://huggingface.co/spaces/$SPACE"
 echo
 echo "    Username: your Hugging Face username"
 echo "    Password: a WRITE access token from huggingface.co/settings/tokens"
-echo "              (your account password will NOT work)"
 echo
 git remote add hf "https://huggingface.co/spaces/$SPACE"
 git push -f hf hf-deploy:main
 
 cat <<'DONE'
 
-Pushed. The Space is now building -- expect 10-15 minutes the first time,
+Pushed. The Space is building now -- expect 10-15 minutes the first time,
 because PyTorch is installed and the search index is built during the build
 so that visitors never wait for it.
 
