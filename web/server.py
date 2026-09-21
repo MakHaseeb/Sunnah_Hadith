@@ -173,7 +173,7 @@ def auth_config():
     """Tells the page whether sign-in is switched on, and what it gates."""
     return {
         "enabled": google_auth.configured(),
-        "client_id": google_auth.CLIENT_ID or None,
+        "client_id": google_auth.client_id() or None,
         "required_for": ["feedback"],
     }
 

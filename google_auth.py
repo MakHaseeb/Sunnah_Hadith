@@ -23,20 +23,33 @@ The salt lives in HADITH_ID_SALT. If it is not set, one is derived from the
 client id, which is stable but not secret -- fine for a trial, worth setting
 properly before launch so the hashes cannot be recomputed by anyone who
 knows a Google account id.
+
+Both values are read lazily rather than at import, so they can come from
+.env like everything else.
 """
 import hashlib
 import os
 
-CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
-SALT = os.environ.get("HADITH_ID_SALT", "").strip()
+# Read lazily, not at import time. .env is loaded when the server starts,
+# which happens AFTER this module is imported -- reading the environment
+# here at import would capture it before .env had been applied, and the
+# Client ID would silently appear unset no matter what the file said.
+def _env(name):
+    from env_config import load_env
+    load_env()
+    return os.environ.get(name, "").strip()
+
+
+def client_id():
+    return _env("GOOGLE_CLIENT_ID")
 
 
 def configured():
-    return bool(CLIENT_ID)
+    return bool(client_id())
 
 
 def _salt():
-    return SALT or ("derived:" + CLIENT_ID)
+    return _env("HADITH_ID_SALT") or ("derived:" + client_id())
 
 
 def anonymous_id(google_sub):
@@ -56,7 +69,7 @@ def verify(credential):
         from google.auth.transport import requests as g_requests
         from google.oauth2 import id_token as g_id_token
         info = g_id_token.verify_oauth2_token(
-            credential, g_requests.Request(), CLIENT_ID
+            credential, g_requests.Request(), client_id()
         )
         # verify_oauth2_token already checks signature, audience and expiry.
         if info.get("iss") not in ("accounts.google.com",
