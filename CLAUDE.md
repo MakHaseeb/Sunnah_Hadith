@@ -205,12 +205,68 @@ API credentials now work (`.env`, read at runtime by `env_config.py` -- a shell 
 3. **Replace the stubbed LLM call** in `generate_answer.py` with a real API call (same key unblocks it).
 4. **Fix the long-hadith bias (bug #17).** A log length penalty is already measured: top-1 mean chunk count 7.2 -> 1.0, recall@1 9% -> 18%. Second-order, but cheap and real.
 4. **Expand the evaluation harness.** 11 cases is far too few to tune on -- the threshold sweep used only 20 in-domain and 18 out-of-domain probes. Adopt RAGAS metrics (Faithfulness, Answer Relevancy, Context Precision, Context Recall) once generation is real.
-5. **Move to a real vector database** (Pinecone or Supabase/pgvector). 25,210 vectors still fit comfortably in memory, so this is not yet urgent -- it becomes urgent with Sahih Muslim.
+5. **Move to a real vector database** (Postgres + pgvector, or Pinecone). 184,557 vectors still fit in memory (1.06 GB in the running server), so this is not urgent for capacity. The reason to do it anyway is enforcement -- see "What v1 got right" below. **Start from `../Hadith App/db/schema.sql`, not from a blank file.**
 6. **Ingest Sahih Muslim** -- same schema, same pipeline, `load_collection("muslim")`.
 7. **Wrap ingestion in Dagu** (parse -> chunk -> embed -> cross-check) as a scheduled, retryable job with real logging.
 8. **Build the app layer** (web first). Show top 2-3 ranked hadith with confidence, never a single forced answer.
 9. **Add Google Sign-In + per-user daily query cap** to bound cost while free.
 10. **Get scholar/imam review before any real release.** Non-negotiable.
+
+## What v1 got right, and should be reused (`../Hadith App/`)
+
+The sibling directory `/Users/haseebalia/Documents/Claude/Hadith App/` is the abandoned v1.
+It is abandoned as an *application* -- but its database schema is a better written
+specification of this project's rules than v2's Python currently is, and it should not be
+left stranded there. Two files are worth reading before any storage work: `db/schema.sql`
+and `db/retrieval.sql`.
+
+**PostgreSQL was in v1 for two separate jobs, and only the second is the usual "database
+for RAG" reason.**
+
+1. **The schema enforced the religious and legal rules, so no code path could bypass them.**
+   Its own comment: *"anything that protects against fabrication or unattributed verdicts is
+   enforced here in the database as well as in Python ... so no code path, including ones
+   written later, can bypass it."* Concretely: there is deliberately **no `grade` column** --
+   gradings are a separate attributed `{grader, grade}` table, so "this hadith is sahih"
+   cannot be recorded without saying who said so; narration rows are **immutable** (an
+   `UPDATE` trigger raises, changes mean a new `corpus_version`); English text is allowed
+   **only** alongside a `translation_id` whose licence status is tracked, so an
+   unredistributable translation cannot be stored unnoticed; and weak hadith are excluded by
+   a **view** (`answerable_narration`) that retrieval is the only thing permitted to read --
+   the filter sits between the data and every possible query rather than in each query.
+
+2. **pgvector held the embeddings** (HNSW index, one row per window per language per model),
+   so text and vectors lived in one system and a single query could filter and rank together.
+
+**v2 has neither.** Vectors are numpy in memory cached to `.npy`; the rules live in
+`grading.py` and `stub_filter.py` as application code. That is simpler and deploys as one
+container, but it is genuinely weaker in one respect: **nothing structurally prevents a
+future change from surfacing a weak hadith.** In v1 the database would have refused. This is
+a real regression from v1 to v2 and should be a deliberate, revisited choice rather than an
+accident of wanting a simpler deploy.
+
+**The strongest evidence that v1's schema is right:** bug #26 in this document records
+working out from first principles that a *mawdu* (fabricated) grading must exclude a hadith
+outright, even when another scholar graded it sound -- because "weak chain" and "falsely
+attributed" are different claims. v1's schema already encoded exactly that asymmetry, a week
+earlier:
+
+```sql
+-- Any grader: a fabrication verdict may exclude even when it may not include.
+EXISTS (SELECT 1 FROM grading g
+        WHERE g.narration_id = n.id AND g.grade_class = 'mawdu') AS judged_fabricated,
+```
+
+The same rule was reached twice independently. Treat v1's `grade_class` enum (`sahih`,
+`hasan`, `daif`, `mawdu`, `isnad_only`, `non_prophetic`, `needs_review`, `ungraded`,
+`unmapped`) as a more considered vocabulary than v2's regex matching -- note especially
+`isnad_only` and `non_prophetic`, distinctions v2 does not currently make at all, and
+`unmapped`, which fails closed on a grade string nobody has reviewed.
+
+Also worth lifting from v1 regardless of the database decision: `src/hadith/grades.py`
+(reviewable grade-string table, unknown strings fail closed), the frozen-snapshot-plus-
+SHA-256-manifest ingestion, and `ingest_reject` -- source records that could not be parsed
+are **kept and counted**, never silently dropped.
 
 ### Open questions worth a deliberate decision
 - **Licensing/provenance of the structured source** before any public release. The text is the widely-distributed Khan translation, but the dataset is a community GitHub mirror. The PDF cross-check helps the integrity story; it does not settle licensing.
