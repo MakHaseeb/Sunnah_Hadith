@@ -177,6 +177,32 @@ This is the actual engineering history — useful both for Claude Code to unders
 
 28. **Stale local servers served old code on ports nobody remembered.** Two orphaned `uvicorn` processes from earlier sessions were found holding ports 8000 and 8077; a newly started server failed to bind and exited, so `localhost:8000` kept answering from a build of unknown age. This is the same class of failure as the earlier incident where leftover test caps (`HADITH_DAILY_CAP=3`, already exhausted) meant every search during a live demo ran degraded with no relevance check -- and nobody could tell from the page. **Before any local test that will be believed: `pgrep -fl "uvicorn web.server"` and check `env | grep HADITH`.** An app that degrades gracefully is also an app that can lie about its own quality quietly.
 
+29. **The container was rebuilding the search index on every deploy, and that -- not the free tier -- was why Hugging Face appeared to need paid hardware.** The Dockerfile downloaded the collections, assembled the corpus and embedded all 184,557 chunks during the image build. That is the heaviest CPU work in the project: 6.4 minutes on eight laptop cores, and long enough on a free Space's two shared cores to look like the free tier could not run this app. It can. The work was simply being redone on a slow machine after it had already been done on a fast one.
+
+    Fixed by `publish_index.py`: the index is built once locally and pushed to a **private** Hugging Face dataset repo, and the container downloads it. Measured from a clean room containing only the 47 git-tracked files: corpus 2.9s, vectors 15.9s, index ready in 25s, no re-embedding. Free CPU Basic is 2 vCPU / 16 GB against a 1.06 GB running footprint, so the app fits with room to spare. **Expected saving: ~$22/month to $0.**
+
+    Three decisions inside that are worth keeping:
+
+    - **The corpus ships WITH its vectors, not rebuilt from the CDN.** The embedding cache is keyed on a hash of the model name plus every chunk's text, so a single character of drift in the community source would miss the cache and either trigger an hour of re-embedding or -- worse -- deploy a corpus nobody had reviewed. Pinning both means the deployed text is exactly the tested text. v1 reached the same conclusion by a different route: frozen snapshots plus a SHA-256 manifest.
+    - **A missing or mismatched artifact FAILS THE BUILD.** The tempting fallback -- rebuild from the CDN if the download fails -- was rejected. A failed build is visible and recoverable; a silently unpinned corpus is the exact failure shape of bugs #26 and #28, where the system kept working while being wrong.
+    - **The dataset repo is private.** The English text is the Khan/Siddiqui translation whose redistribution licence is unsettled (see open questions). An app answering a question with a few hadith is a different act from publishing the whole corpus as a downloadable file. Verified: an unauthenticated fetch returns 401.
+
+    The manifest (`data/index_manifest.json`) is committed and copied into the image **before** the download layer, so the 300 MB fetch is invalidated exactly when the index changes and is reused on code-only deploys.
+
+    **This is also half of zero-downtime updates.** Updating the corpus is now "publish a new artifact and redeploy" rather than "rebuild everything on the server". The remaining half -- swapping to a new index without dropping requests -- is deliberately NOT built: see the note below.
+
+### Updating documents without downtime -- the decision
+
+The pattern, in one sentence: **never mutate the live index; build the new one beside it, verify it, then flip a pointer in one atomic step.** It can be applied in three places, and this project has now touched all three:
+
+1. **Container level** -- build a new image, health-check it, then switch traffic. The old container serves throughout. Now feasible because the build is a download rather than an hour of CPU.
+2. **In-process** -- a background job builds a new store and one assignment swaps `STATE["store"]`. In-flight requests finish against the old object. Costs double memory briefly (~2.1 GB).
+3. **In the database** -- load a new version alongside, flip one flag in a transaction. **v1 already implemented this**: `CREATE UNIQUE INDEX one_current_corpus_version ON corpus_version (is_current) WHERE is_current` guarantees at most one current version, so readers can never observe a half-updated corpus.
+
+The real hazard is not downtime but a **half-updated state** -- some queries hitting old text and some new, or the index and the corpus disagreeing so a search returns a citation that no longer resolves. The second benefit is instant rollback: the previous version is still there, so undoing a bad update is flipping the pointer back.
+
+**Decision: (1) yes, (2) not yet, (3) only if the database is adopted.** The in-process hot swap is real engineering for content that changes a few times a year; maintaining it forever to save twenty seconds a quarter is not earned. Revisit if the corpus ever updates weekly. Knowing when NOT to apply this is part of the answer.
+
 ## Research findings incorporated into the plan
 
 - Even paid, professional legal-AI products (LexisNexis's Lexis+ AI, Thomson Reuters's Westlaw AI) hallucinate an estimated **17–33% of the time** despite using RAG, per a 2025 Stanford study — useful for calibrating expectations. This is a genuinely hard, industry-wide unsolved problem, not a sign of doing something wrong.

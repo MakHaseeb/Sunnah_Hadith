@@ -1,9 +1,16 @@
 # Hugging Face Spaces (Docker SDK).
 #
-# The search index takes about four minutes to build. That is fine once and
-# intolerable on every cold start, so it is built HERE, during the image
-# build, and baked into the image. A Space that wakes from sleep then serves
-# its first visitor immediately instead of making them wait.
+# The search index is NOT built here. It is built once by publish_index.py and
+# downloaded as a pinned artifact -- see that file for the full reasoning. The
+# short version: embedding 184,557 chunks is the heaviest CPU work in the
+# project, and asking a free Space's two shared cores to redo it on every
+# build is what made the free tier look incapable of running this app. It is
+# not. Downloading 300 MB takes a moment; recomputing it takes an hour.
+#
+# The corpus ships with its vectors rather than being rebuilt from the
+# community CDN, because the embedding cache is keyed on the chunk text: if
+# that source drifted by one character the cache would miss and the container
+# would either re-embed everything or serve a corpus nobody had reviewed.
 FROM python:3.11-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
@@ -38,6 +45,43 @@ RUN pip install --no-cache-dir -r requirements.txt \
  && python -c "import torch, sentence_transformers, transformers; \
 print(f'torch {torch.__version__}, sentence-transformers {sentence_transformers.__version__}, transformers {transformers.__version__}')"
 
+# ---- the pinned index artifact -------------------------------------------
+# The manifest is copied on its own and FIRST, so this download layer is
+# invalidated exactly when the index changes and not when ordinary code
+# changes. A code-only deploy reuses the cached 300 MB rather than fetching
+# it again.
+COPY data/index_manifest.json ./data/index_manifest.json
+
+# HF_TOKEN is a Space secret with read access to the private dataset holding
+# the corpus and its vectors. required=true, and every file is checked against
+# the SHA-256 in the manifest.
+#
+# This step FAILS THE BUILD if anything is missing or does not match. That is
+# deliberate. The tempting alternative -- fall back to rebuilding from the
+# CDN -- would quietly deploy a corpus nobody had reviewed, and this project
+# has learned twice now (bugs #26, #28) that its worst failures are the ones
+# that keep working while being wrong. A failed build is visible; a silently
+# unpinned corpus is not.
+ARG INDEX_REPO=haseebahmed0806/hadith-index
+RUN --mount=type=secret,id=HF_TOKEN,mode=0444,required=true \
+    set -eu; \
+    BASE="https://huggingface.co/datasets/$INDEX_REPO/resolve/main"; \
+    AUTH="Authorization: Bearer $(cat /run/secrets/HF_TOKEN)"; \
+    mkdir -p data/cache; \
+    EMB=$(python -c "import json;print(json.load(open('data/index_manifest.json'))['embedding_file'])"); \
+    echo "fetching corpus and $EMB from $INDEX_REPO"; \
+    curl -fsSL --retry 3 -H "$AUTH" -o data/corpus.json      "$BASE/corpus.json"; \
+    curl -fsSL --retry 3 -H "$AUTH" -o "data/cache/$EMB"     "$BASE/$EMB"; \
+    python -c "\
+import hashlib, json, sys; \
+m = json.load(open('data/index_manifest.json')); \
+[sys.exit(f'{p}: sha256 mismatch -- artifact does not match the manifest') \
+ for p, want in (('data/corpus.json', m['corpus_sha256']), \
+                 ('data/cache/' + m['embedding_file'], m['embedding_sha256'])) \
+ if hashlib.sha256(open(p,'rb').read()).hexdigest() != want]; \
+print('artifact verified:', m['hadith'], 'hadith,', m['chunks'], 'chunks')"
+# --------------------------------------------------------------------------
+
 COPY . .
 
 # Hugging Face rejects binary files in a normal git push, and the background
@@ -51,18 +95,19 @@ RUN curl -fsSL --retry 3 -o web/static/bg-photo.jpg "$BG_URL" \
       && echo "background image fetched" \
       || echo "background image unavailable — page falls back to plain dark"
 
-# Fetch the collections, assemble the corpus, download the embedding model
-# and build the index -- all now, so none of it happens while someone waits.
-# The cross-check against the PDF is skipped: the PDF is not in the repo, and
-# build_corpus falls back to the structured source alone, which only means
-# records show as "single source" rather than "cross-checked".
-RUN python load_structured.py \
- && python build_corpus.py \
- && python -c "import json, sys; sys.path.insert(0,'.'); \
+# Warm the sentence-transformers model into the image. Only the model is
+# downloaded here -- nothing is embedded, because the vectors already exist.
+RUN python -c "from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('multi-qa-MiniLM-L6-cos-v1'); print('embedding model cached')"
+
+# Prove the index loads and answers, so a broken artifact fails the BUILD
+# rather than the first visitor.
+RUN python -c "import json, sys, time; sys.path.insert(0,'.'); \
 from hybrid_retrieve import HybridStore; from expansion import load_expansions; \
-c=json.load(open('data/corpus.json')); \
-s=HybridStore(c, expansions=load_expansions()); \
-print(f'index built: {len(s.hadiths)} hadith, {len(s.chunks)} chunks')"
+t=time.time(); \
+s=HybridStore(json.load(open('data/corpus.json')), expansions=load_expansions()); \
+assert s.retrieve('how should I treat my parents', k=3), 'retrieval returned nothing'; \
+print(f'index ready: {len(s.hadiths)} hadith, {len(s.chunks)} chunks, {time.time()-t:.0f}s')"
 
 # Spaces routes to 7860.
 EXPOSE 7860
