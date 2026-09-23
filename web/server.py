@@ -24,6 +24,7 @@ immediately. No database to set up, nothing to lose on a crash, and it is
 trivially readable. It can move to a real database when volume justifies
 one, which it will not for a long time.
 """
+import hmac
 import json
 import os
 import time
@@ -48,8 +49,34 @@ import analytics                                                # noqa: E402
 import google_auth                                              # noqa: E402
 import usage_cap                                                # noqa: E402
 import topics as topics_mod                                     # noqa: E402
+from durable_store import DurableStore, ensure_repo             # noqa: E402
 
 FEEDBACK_PATH = os.path.join(PROJECT_DIR, "data", "feedback.jsonl")
+
+# Where feedback and visitor counts are kept so they survive a restart.
+# Container disk does not: Hugging Face wipes it every time the Space
+# restarts, which was silently throwing away every report anyone sent.
+# Unset on a server with a real disk, and this falls back to plain files.
+DATA_REPO = os.environ.get("HADITH_DATA_REPO", "").strip()
+HF_TOKEN = (os.environ.get("HF_TOKEN")
+            or os.environ.get("HUGGING_FACE_HUB_TOKEN") or "").strip()
+
+# Guards the endpoints that exist for the person RUNNING the site, not for
+# its visitors: the reports people sent, the visitor counts, and what the
+# app is spending. None of these were protected, and all three were served
+# to anyone who asked.
+OWNER_KEY = os.environ.get("HADITH_OWNER_KEY", "").strip()
+
+
+def _owner_only(key, what):
+    """Shared gate. Refuses when no key is configured rather than falling
+    open -- the failure that matters here is exposure, not inconvenience."""
+    if not OWNER_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Reading {what} is switched off. Set HADITH_OWNER_KEY.")
+    if not hmac.compare_digest(key, OWNER_KEY):
+        raise HTTPException(status_code=401, detail="Wrong key.")
 SHORTLIST = 10
 MAX_SHOWN = 3
 USE_RELEVANCE_CHECK = os.environ.get("HADITH_RELEVANCE_CHECK", "1") != "0"
@@ -68,6 +95,16 @@ STATE = {}
 @app.on_event("startup")
 def startup():
     t0 = time.time()
+    # Storage first: if a report arrives seconds after boot it must already
+    # have somewhere durable to go.
+    if DATA_REPO and HF_TOKEN:
+        ensure_repo(DATA_REPO, HF_TOKEN)
+    STATE["feedback"] = DurableStore(
+        FEEDBACK_PATH, repo=DATA_REPO, token=HF_TOKEN,
+        filename="feedback.jsonl", interval=5.0, name="feedback")
+    restored = STATE["feedback"].restore()
+    STATE["feedback"].start()
+    analytics.attach_durable(DATA_REPO, HF_TOKEN)
     with open(os.path.join(PROJECT_DIR, "data", "corpus.json")) as f:
         corpus = json.load(f)
     STATE["store"] = HybridStore(corpus, expansions=load_expansions())
@@ -80,9 +117,14 @@ def startup():
         except SystemExit as e:
             # No API key: run search-only rather than refusing to start.
             print(f"  relevance check disabled: {e}")
+    fb = STATE["feedback"].status()
     print(f"  ready in {time.time()-t0:.1f}s — "
           f"{len(STATE['store'].hadiths):,} hadith, "
-          f"relevance check {'ON' if STATE['client'] else 'OFF'}")
+          f"relevance check {'ON' if STATE['client'] else 'OFF'}, "
+          f"feedback {'durable' if fb['durable'] else 'LOCAL ONLY (lost on restart)'}"
+          + (f", {restored} restored" if restored else ""))
+    if fb["error"]:
+        print(f"  !! feedback storage: {fb['error']}")
 
 
 class SearchRequest(BaseModel):
@@ -201,15 +243,24 @@ def event(req: EventRequest):
 
 
 @app.get("/api/usage")
-def usage():
+def usage(key: str = ""):
     """Today's spend against the cap. For the site owner."""
+    _owner_only(key, "spend")
     return usage_cap.status()
 
 
 @app.get("/api/stats")
-def stats(days: int = 30):
+def stats(key: str = "", days: int = 30):
     """Counts for the site owner. No identities, by design."""
-    return analytics.summary(days=days)
+    _owner_only(key, "visitor counts")
+    out = analytics.summary(days=days)
+    # The owner is also the only person who should see whether durable
+    # storage is actually working, including why it is not.
+    out["storage"] = {
+        "feedback": STATE["feedback"].status() if STATE.get("feedback") else None,
+        "events": analytics.status(),
+    }
+    return out
 
 
 @app.get("/api/auth")
@@ -219,6 +270,17 @@ def auth_config():
         "enabled": google_auth.configured(),
         "client_id": google_auth.client_id() or None,
         "required_for": ["feedback"],
+    }
+
+
+def _storage_summary(st):
+    if not st:
+        return {"durable": False, "healthy": False}
+    return {
+        "durable": bool(st.get("durable")),
+        "rows": st.get("rows", 0),
+        "pending": bool(st.get("pending")),
+        "healthy": bool(st.get("durable")) and not st.get("error"),
     }
 
 
@@ -236,6 +298,15 @@ def health():
         "usage": usage_cap.status(),
         "sign_in": google_auth.configured(),
         "support_link": bool(SUPPORT_URL),
+        # Reported rather than assumed: if the durable mirror is broken,
+        # feedback is being collected and quietly thrown away, which looks
+        # identical from the outside to everything working.
+        # Public, because a monitor polls it -- so it says WHETHER storage is
+        # healthy without naming the private repo or echoing raw error text.
+        # The detail is available to the owner through /api/stats.
+        "feedback_storage": _storage_summary(
+            STATE["feedback"].status() if STATE.get("feedback") else None),
+        "events_storage": _storage_summary(analytics.status()),
     }
 
 
@@ -312,28 +383,23 @@ def feedback(req: FeedbackRequest):
         "reason": req.reason[:64],
         "detail": (req.detail or "")[:1000],
     }
-    os.makedirs(os.path.dirname(FEEDBACK_PATH), exist_ok=True)
-    with open(FEEDBACK_PATH, "a") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
-        f.flush()
+    STATE["feedback"].append(record)
     analytics.record("feedback", req.visitor)
     return {"ok": True, "id": record["id"]}
 
 
 @app.get("/api/feedback")
-def list_feedback(limit: int = 100):
-    """Everything people have reported. For you, to decide what to fix."""
-    if not os.path.exists(FEEDBACK_PATH):
-        return {"count": 0, "reports": []}
-    rows = []
-    with open(FEEDBACK_PATH) as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                try:
-                    rows.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
+def list_feedback(limit: int = 100, key: str = ""):
+    """
+    Everything people have reported. For the owner, to decide what to fix.
+
+    This used to be open to anyone. It should not have been: the reports are
+    free text a stranger typed, sent in the expectation that the person
+    running the site would read them -- not the whole internet. Set
+    HADITH_OWNER_KEY and pass ?key=... to read it.
+    """
+    _owner_only(key, "feedback")
+    rows = STATE["feedback"].read_all()
     return {"count": len(rows), "reports": rows[-limit:][::-1]}
 
 

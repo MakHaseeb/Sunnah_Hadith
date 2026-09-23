@@ -203,6 +203,21 @@ The real hazard is not downtime but a **half-updated state** -- some queries hit
 
 **Decision: (1) yes, (2) not yet, (3) only if the database is adopted.** The in-process hot swap is real engineering for content that changes a few times a year; maintaining it forever to save twenty seconds a quarter is not earned. Revisit if the corpus ever updates weekly. Knowing when NOT to apply this is part of the answer.
 
+30. **Feedback and visitor counts were being written to container disk, which Hugging Face wipes on every restart -- so every report anyone sent was silently destroyed.** The app looked like it was working: the button worked, the request returned 200, the thank-you message appeared. Nothing told anybody the record was gone minutes later. For an app whose entire trial exists to collect "this answer looks wrong", this was the worst thing to lose quietly, and it had already lost real reports.
+
+    Fixed in `durable_store.py`: the local file stays the working copy (written and read synchronously, so no web request ever waits on the network) and a background thread mirrors it to a private Hugging Face dataset, restoring it at startup. Feedback mirrors every 5s, counts every 60s -- losing a minute of counts is acceptable in a way that losing somebody's report is not. With `HADITH_DATA_REPO` unset it is a plain local file again, so the eventual move to a server with a real disk needs no change.
+
+    **Proved by simulating the failure, not by reasoning about it:** submitted a report, deleted `data/feedback.jsonl` outright, restarted, and confirmed all 5 records came back (4 real ones from earlier testing plus the probe). Counts survived the same wipe: 116 rows restored.
+
+    A quieter instance of the same class: a read-only token builds the image perfectly and then cannot save a single report, with the only symptom being data that is not there later. `/api/health` therefore reports `feedback_storage.healthy` -- the storage layer has to be able to say it is broken, because from the outside broken looks exactly like working.
+
+31. **Three owner-only endpoints were served to anyone who asked.** Found while testing the feedback fix, not looked for.
+    - `GET /api/feedback` returned **every report anyone had ever sent**, unauthenticated -- free text people wrote in the expectation that the person running the site would read it, not the whole internet.
+    - `GET /api/stats` returned visitor and search counts.
+    - `GET /api/usage` returned the day's spend, the cap, and **how much budget remained** -- which is the one genuinely exploitable item, since it tells somebody exactly how much of the paid relevance-check budget is left to drain.
+
+    All three now require `HADITH_OWNER_KEY` and **refuse when no key is configured rather than falling open**: the failure that matters here is exposure, not inconvenience. `/api/health` stays public because a monitor polls it, but no longer names the private repo or echoes raw error text -- it answers whether storage is healthy, not how it is wired.
+
 ## Research findings incorporated into the plan
 
 - Even paid, professional legal-AI products (LexisNexis's Lexis+ AI, Thomson Reuters's Westlaw AI) hallucinate an estimated **17–33% of the time** despite using RAG, per a 2025 Stanford study — useful for calibrating expectations. This is a genuinely hard, industry-wide unsolved problem, not a sign of doing something wrong.

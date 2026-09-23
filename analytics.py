@@ -47,6 +47,32 @@ ALLOWED = {
 }
 
 
+# Counts share the feedback problem: written to container disk, wiped on
+# every restart. They are mirrored the same way, but on a slower timer --
+# every search writes one of these, and each mirror is a commit, so they are
+# batched. Losing the last minute of counts if the container dies is
+# acceptable in a way that losing somebody's report is not.
+_STORE = None
+
+
+def attach_durable(repo, token):
+    """Called once at startup. Without a repo this stays a plain file."""
+    global _STORE
+    if not (repo and token):
+        return None
+    from durable_store import DurableStore
+    _STORE = DurableStore(EVENTS_PATH, repo=repo, token=token,
+                          filename="events.jsonl", interval=60.0,
+                          name="events")
+    _STORE.restore()
+    _STORE.start()
+    return _STORE
+
+
+def status():
+    return _STORE.status() if _STORE else {"durable": False, "repo": None}
+
+
 def record(event, visitor=None):
     if event not in ALLOWED:
         return False
@@ -57,6 +83,8 @@ def record(event, visitor=None):
         # to be able to do anything else with
         "v": (visitor or "")[:32],
     }
+    if _STORE is not None:
+        return _STORE.append(row)
     os.makedirs(os.path.dirname(EVENTS_PATH), exist_ok=True)
     with open(EVENTS_PATH, "a") as f:
         f.write(json.dumps(row) + "\n")
