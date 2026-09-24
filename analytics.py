@@ -44,6 +44,7 @@ ALLOWED = {
     "support_open", # someone opened the support panel
     "support_click",# someone clicked through to the payment page
     "signin",       # someone signed in with Google
+    "best_pick",    # someone marked which answer actually answered them
 }
 
 

@@ -218,6 +218,16 @@ The real hazard is not downtime but a **half-updated state** -- some queries hit
 
     All three now require `HADITH_OWNER_KEY` and **refuse when no key is configured rather than falling open**: the failure that matters here is exposure, not inconvenience. `/api/health` stays public because a monitor polls it, but no longer names the private repo or echoes raw error text -- it answers whether storage is healthy, not how it is wired.
 
+32. **A "this one answers it" button on each result -- collecting ground truth, which is NOT the same as the app learning.** Haseeb asked for this after noticing while testing that the right hadith is often second or third rather than first, and described it as helping the app "self-learn". Worth stating plainly because the distinction matters more here than in most apps: **nothing in this system trains on those clicks, and it should not.** Scripture retrieval quietly re-ranking itself because of taps would be unreviewable, and would sit badly beside the standing rule that a scholar signs off on what users see.
+
+    What a pick actually produces is a labelled example -- the question in a real person's words, the candidates served, and which one answered it. The evaluation harness has eleven cases, all written by the two people building the thing, and CLAUDE.md already calls that set "misleadingly easy". This turns live use into a real one. `picks_to_eval.py` converts picks into candidate harness cases **offline, for a human to read first** -- that ordering is the safety argument, not an implementation detail.
+
+    **The `rank` field is the point.** Bugs #15 and #17 were both measured against questions we wrote ourselves. Rank counts from real use answer a question neither could: how often the right answer was retrieved and merely shown too low. That is a ranking problem with a number attached, and it is far cheaper to fix than "retrieval missed it entirely". The first real measurement, from six test picks, put "right first time" at 33-40% -- which if it holds on real traffic says the retrieval is much better than the top-1 experience suggests.
+
+    **No sign-in, deliberately, unlike feedback.** Feedback is free text and free text attracts abuse. A pick is one tap from a fixed list, and the server rejects any choice that was not among the results it actually served -- so the worst a bad actor can do is name the wrong one of three. Putting a Google sign-in in front of a single tap would cost most of the data, and the data is the entire point.
+
+    Kept in its own file (`picks.jsonl`) rather than mixed into feedback: a report says "this is wrong", a pick says "this was right". Only the second is ground truth.
+
 ## Research findings incorporated into the plan
 
 - Even paid, professional legal-AI products (LexisNexis's Lexis+ AI, Thomson Reuters's Westlaw AI) hallucinate an estimated **17–33% of the time** despite using RAG, per a 2025 Stanford study — useful for calibrating expectations. This is a genuinely hard, industry-wide unsolved problem, not a sign of doing something wrong.

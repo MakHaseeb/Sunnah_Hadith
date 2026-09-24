@@ -27,6 +27,7 @@ one, which it will not for a long time.
 import hmac
 import json
 import os
+import threading
 import time
 import uuid
 from typing import Optional
@@ -52,6 +53,7 @@ import topics as topics_mod                                     # noqa: E402
 from durable_store import DurableStore, ensure_repo             # noqa: E402
 
 FEEDBACK_PATH = os.path.join(PROJECT_DIR, "data", "feedback.jsonl")
+PICKS_PATH = os.path.join(PROJECT_DIR, "data", "picks.jsonl")
 
 # Where feedback and visitor counts are kept so they survive a restart.
 # Container disk does not: Hugging Face wipes it every time the Space
@@ -102,9 +104,47 @@ def startup():
     STATE["feedback"] = DurableStore(
         FEEDBACK_PATH, repo=DATA_REPO, token=HF_TOKEN,
         filename="feedback.jsonl", interval=5.0, name="feedback")
-    restored = STATE["feedback"].restore()
+    # Kept apart from feedback on purpose. A report says "this is wrong";
+    # a pick says "of the ones you showed me, THIS was right". The second is
+    # ground truth and converts straight into evaluation cases, so mixing it
+    # with free-text complaints would make both harder to use.
+    STATE["picks"] = DurableStore(
+        PICKS_PATH, repo=DATA_REPO, token=HF_TOKEN,
+        filename="picks.jsonl", interval=5.0, name="picks")
+
+    # Restoring is three separate network round trips, and doing them one
+    # after another added 40s to startup -- paid by whoever wakes a sleeping
+    # Space. They do not depend on each other, so they run together.
+    #
+    # They still BLOCK startup rather than running in the background: until
+    # a restore finishes, the local file looks empty, and a report arriving
+    # in that window would create a fresh file that the restore then
+    # declines to overwrite -- silently dropping every earlier record. A
+    # slower start is a fair price for not having that race.
+    restored = 0
+    threads = []
+    results = {}
+
+    def _restore(key, fn):
+        try:
+            results[key] = fn()
+        except Exception as e:
+            results[key] = 0
+            print(f"  restore {key} failed: {str(e)[:120]}")
+
+    for key, fn in (("feedback", STATE["feedback"].restore),
+                    ("picks", STATE["picks"].restore),
+                    ("events", lambda: analytics.attach_durable(
+                        DATA_REPO, HF_TOKEN))):
+        t = threading.Thread(target=_restore, args=(key, fn), daemon=True)
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join(timeout=45)
+    restored = results.get("feedback") or 0
+
     STATE["feedback"].start()
-    analytics.attach_durable(DATA_REPO, HF_TOKEN)
+    STATE["picks"].start()
     with open(os.path.join(PROJECT_DIR, "data", "corpus.json")) as f:
         corpus = json.load(f)
     STATE["store"] = HybridStore(corpus, expansions=load_expansions())
@@ -259,7 +299,9 @@ def stats(key: str = "", days: int = 30):
     out["storage"] = {
         "feedback": STATE["feedback"].status() if STATE.get("feedback") else None,
         "events": analytics.status(),
+        "picks": STATE["picks"].status() if STATE.get("picks") else None,
     }
+    out["ranking"] = _rank_summary()
     return out
 
 
@@ -273,6 +315,25 @@ def auth_config():
     }
 
 
+def _rank_summary():
+    """
+    Where the right answer actually lands, according to the people reading
+    it. The single most useful number this app can collect about itself.
+    """
+    rows = STATE["picks"].read_all() if STATE.get("picks") else []
+    if not rows:
+        return {"picks": 0}
+    counts = {}
+    for r in rows:
+        counts[r.get("rank")] = counts.get(r.get("rank"), 0) + 1
+    n = len(rows)
+    return {
+        "picks": n,
+        "by_rank": dict(sorted(counts.items(), key=lambda kv: (kv[0] or 99))),
+        "right_first_time": round(counts.get(1, 0) / n, 3),
+    }
+
+
 def _storage_summary(st):
     if not st:
         return {"durable": False, "healthy": False}
@@ -282,6 +343,74 @@ def _storage_summary(st):
         "pending": bool(st.get("pending")),
         "healthy": bool(st.get("durable")) and not st.get("error"),
     }
+
+
+class PickRequest(BaseModel):
+    question: str
+    chosen: str                       # the hadith the reader says answers it
+    shown: list                       # everything they were shown, in order
+    visitor: Optional[str] = ""
+
+
+@app.post("/api/best")
+def best_answer(req: PickRequest):
+    """
+    "Of the answers you gave me, THIS is the one that answers my question."
+
+    WHY THIS IS NOT FEEDBACK, AND NOT LEARNING
+    ------------------------------------------
+    Nothing here changes retrieval. The app does not train on these clicks
+    and should not: scripture retrieval quietly drifting because of taps is
+    the last thing this project wants. What a pick produces is a labelled
+    example -- question, the candidates shown, and which was right -- which
+    is exactly the ground truth the evaluation harness has never had. Eleven
+    hand-written cases become as many real ones as people are willing to
+    mark. `picks_to_eval.py` turns them into harness cases offline, where a
+    human can look at them first.
+
+    The RANK is the point. If the right answer is routinely second or third,
+    that is a ranking problem with a number attached -- which is what bug #15
+    has been missing since it was written.
+
+    WHY NO SIGN-IN
+    --------------
+    Feedback needs sign-in because it is free text and free text attracts
+    abuse. A pick is one tap from a fixed list: the chosen hadith must be one
+    the server actually showed, so the worst a bad actor can do is claim the
+    wrong one of three. Putting a Google sign-in in front of a single tap
+    would cost most of the data, and the data is the entire point.
+    """
+    question = (req.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="No question given.")
+
+    shown = [str(x) for x in (req.shown or [])][:MAX_SHOWN]
+    chosen = str(req.chosen or "")
+    # A pick is only meaningful about results we actually served. This also
+    # means nobody can post arbitrary ids into the ground-truth set.
+    if chosen not in shown:
+        raise HTTPException(
+            status_code=400,
+            detail="That answer was not among the ones shown.")
+
+    store = STATE.get("store")
+    known = {h["id"] for h in store.hadiths} if store else set()
+    if chosen not in known:
+        raise HTTPException(status_code=400, detail="Unknown hadith.")
+
+    record = {
+        "id": uuid.uuid4().hex[:12],
+        "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "question": question[:500],
+        "chosen": chosen,
+        "shown": shown,
+        # 1-based, so "rank 1" reads as "we got it right first time".
+        "rank": shown.index(chosen) + 1,
+        "by": (req.visitor or "")[:32],
+    }
+    STATE["picks"].append(record)
+    analytics.record("best_pick", req.visitor)
+    return {"ok": True, "rank": record["rank"]}
 
 
 @app.get("/api/health")
@@ -307,6 +436,8 @@ def health():
         "feedback_storage": _storage_summary(
             STATE["feedback"].status() if STATE.get("feedback") else None),
         "events_storage": _storage_summary(analytics.status()),
+        "picks_storage": _storage_summary(
+            STATE["picks"].status() if STATE.get("picks") else None),
     }
 
 

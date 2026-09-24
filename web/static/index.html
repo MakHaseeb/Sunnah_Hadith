@@ -217,7 +217,18 @@
      see that the judgement is contested rather than settled. */
   .badge.grade.differs{background:rgba(122,92,34,.13);color:var(--warn);
     border-color:rgba(122,92,34,.26)}
-  .report{margin-left:auto;padding:6px 13px;font-size:12px;border-radius:99px;
+  /* "This one answers it". Placed before Report and styled as the
+     agreeable action, because saying an answer was RIGHT should be at
+     least as easy as saying it was wrong -- and it is the more useful of
+     the two, since it is the only thing that produces ground truth. */
+  .best{margin-left:auto;padding:6px 13px;font-size:12px;border-radius:99px;
+    background:transparent;border:1px solid var(--glass-line);color:var(--muted);
+    font-family:'Inter',system-ui,sans-serif;transition:all .22s ease;cursor:pointer}
+  .best:hover{border-color:#8fbf8a;color:#a9d3a4;transform:translateY(-1px)}
+  .best.picked{border-color:#8fbf8a;color:#0f1a0e;background:#a9d3a4;
+    font-weight:600;cursor:default;transform:none}
+  .best.dimmed{opacity:.38}
+  .report{padding:6px 13px;font-size:12px;border-radius:99px;
     background:transparent;border:1px solid var(--glass-line);color:var(--muted);
     font-family:'Inter',system-ui,sans-serif;transition:all .22s ease}
   .report:hover{border-color:var(--warn);color:var(--warn);transform:translateY(-1px)}
@@ -725,6 +736,7 @@ function cardHTML(h,i){
         ${h.grade?`<span class="badge grade${/differ/.test(h.grade)?' differs':''}" title="${/differ/.test(h.grade)?'Scholars reached different verdicts on this report. At least one graded it sound, so it is shown -- but the grading is contested.':'Authenticity grading recorded for this hadith.'}">${esc(h.grade)}</span>`:''}
         <span class="badge ${h.cross_checked?'':'single'}">
           ${h.cross_checked?'Checked against a second source':'Single source'}</span>
+        <button class="best" aria-label="This one answers it" title="Mark this as the answer to your question. It helps us see how often the right hadith is not shown first.">✓ This one answers it</button>
         <button class="report">Report</button>
       </div>
       <div class="fbslot"></div>
@@ -732,6 +744,28 @@ function cardHTML(h,i){
 }
 
 function wireCards(){
+  // One pick per search: the question is "which of these answered it",
+  // so a second choice replaces the first rather than adding to it.
+  out.querySelectorAll('.best').forEach(btn=>btn.onclick=async()=>{
+    if(btn.classList.contains('picked'))return;
+    const card=btn.closest('.card');
+    const shown=[...out.querySelectorAll('.card')].map(c=>c.dataset.id);
+    const all=[...out.querySelectorAll('.best')];
+    all.forEach(b=>{b.classList.remove('picked');b.classList.add('dimmed');
+                    b.textContent='✓ This one answers it';
+                    b.setAttribute('aria-label','This one answers it');});
+    btn.classList.remove('dimmed');btn.classList.add('picked');
+    btn.textContent='✓ Marked as the answer';
+    btn.setAttribute('aria-label','Marked as the answer');
+    try{
+      await fetch('/api/best',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({question:lastQuestion,chosen:card.dataset.id,
+                             shown:shown,visitor:VISITOR})});
+    }catch(e){
+      btn.classList.remove('picked');btn.textContent='Could not save — tap again';
+    }
+  });
   out.querySelectorAll('.report').forEach(btn=>btn.onclick=()=>{
     const card=btn.closest('.card'), slot=card.querySelector('.fbslot');
     if(slot.innerHTML){slot.innerHTML='';return;}
