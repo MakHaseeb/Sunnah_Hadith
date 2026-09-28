@@ -152,7 +152,24 @@
   .icon-btn svg{width:17px;height:17px}
 
   /* ============================= hero ============================= */
-  .hero{max-width:1040px;margin:0 auto;padding:var(--space-8) var(--space-6) 0;text-align:center}
+  /* Three columns for the whole page, not just the part under the search.
+     The rails used to begin below the search box, which left the top left
+     and top right of a wide screen empty and pushed both of them most of a
+     screen down. They now start level with the title and stay put while the
+     middle column scrolls. */
+  .page{max-width:1280px;margin:0 auto;padding:var(--space-8) var(--space-6) 0;
+    display:grid;grid-template-columns:200px minmax(0,1fr) 250px;
+    gap:var(--space-8);align-items:start}
+  .center{min-width:0;text-align:center}
+  /* The rails begin part-way down rather than at the very top. Level with
+     the kicker they crowded the title and the page read as three competing
+     columns; dropping them to about the height of the lede lets the heading
+     breathe and gives the eye somewhere to land first. They still stick near
+     the top of the viewport once you scroll past it, so the offset costs
+     nothing after the first screen. Scales with the viewport because the
+     hero above them does too. */
+  .rail{position:sticky;top:var(--space-6);min-width:0;
+    margin-top:clamp(96px,18vw,250px)}
   .kicker{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;
     color:var(--accent);font-weight:600;margin:0 0 var(--space-5)}
   .kicker::before,.kicker::after{content:"";width:20px;height:1px;background:currentColor;opacity:.5}
@@ -198,26 +215,83 @@
     border:1px solid var(--line);background:var(--surface);transition:all var(--dur-fast) var(--ease)}
   .chip:hover{color:var(--accent);border-color:var(--accent);transform:translateY(-1px)}
 
-  /* ============================= topics ============================= */
-  .topics-section{max-width:var(--measure);margin:var(--space-10) auto 0}
-  .topics-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:var(--space-3)}
-  .topics-head h2{font-family:var(--font-sans);font-size:12.5px;font-weight:600;letter-spacing:.12em;
-    text-transform:uppercase;color:var(--ink-faint);margin:0}
-  .topics{display:flex;flex-wrap:wrap;gap:8px}
-  .topic{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:500;color:var(--ink-muted);
-    padding:8px 14px 8px 16px;border-radius:var(--radius-pill);border:1px solid var(--line);background:var(--surface);
-    transition:all var(--dur-fast) var(--ease)}
-  .topic:hover{border-color:var(--line-strong);color:var(--ink)}
-  .topic[aria-current="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
-  .topic-count{font-size:11px;opacity:.65;font-variant-numeric:tabular-nums}
 
-  /* ============================= daily hadith ============================= */
-  .daily{max-width:var(--measure);margin:var(--space-10) auto 0;padding:var(--space-6) 0 0;
-    border-top:1px solid var(--line);text-align:center}
-  .daily .eyebrow{font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 var(--space-3)}
-  .daily-text{font-family:var(--font-display);font-style:italic;font-weight:400;font-size:21px;line-height:1.55;margin:0 auto;max-width:560px}
-  .daily-cite{display:block;margin-top:var(--space-3);font-size:12.5px;color:var(--ink-faint);font-weight:500}
-  body.has-results .daily{display:none}
+  /* ============================= topics ============================= */
+  .topics-head{margin-bottom:var(--space-3)}
+  .topics-head h2{font-family:var(--font-sans);font-size:12px;font-weight:600;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-faint);margin:0}
+  /* Scrolls within itself: 22 topics would otherwise set the page height. */
+  .topics{display:flex;flex-direction:column;gap:3px;max-height:min(58vh,440px);
+    overflow-y:auto;overscroll-behavior:contain;padding-right:4px;
+    scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+  .topics::-webkit-scrollbar{width:6px}
+  .topics::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
+  .topic{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;
+    font-size:13px;font-weight:500;color:var(--ink-muted);text-align:left;
+    padding:7px 11px;border-radius:var(--radius-sm);border:1px solid transparent;background:none;
+    transition:all var(--dur-fast) var(--ease)}
+  .topic:hover{background:var(--surface);color:var(--ink)}
+  .topic[aria-current="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .topic-count{font-size:10.5px;opacity:.6;font-variant-numeric:tabular-nums;flex:none}
+  /* Results sit directly under the search box, not a scroll away. */
+  .results{margin-top:var(--space-8)}
+  /* Narrow enough and the day's hadith folds beneath; narrower still and the
+     topic rail follows it. The answers stay at the top throughout. */
+  @media (max-width:1100px){
+    .page{grid-template-columns:186px minmax(0,1fr)}
+    .rail-right{grid-column:1 / -1;order:3;position:static;margin-top:var(--space-8)}
+    .daily{max-width:var(--measure);margin:0 auto}
+  }
+  @media (max-width:860px){
+    .page{grid-template-columns:1fr;gap:var(--space-6)}
+    .center{order:1}
+    .rail-left{order:2;position:static;margin-top:0}
+    .topics{flex-direction:row;flex-wrap:wrap;max-height:none;overflow:visible}
+    .topic{width:auto;border-radius:var(--radius-pill);border-color:var(--line);background:var(--surface)}
+  }
+
+  /* ============================= hadith of the day ============================= */
+  /* A right-hand rail now, not a band across the middle. In the centre
+     column it sat between the search box and the answers and had to be
+     hidden the moment a search ran; in its own column it can simply stay,
+     which is the point of having margins to use. */
+  .daily-rail{position:sticky;top:var(--space-5)}
+  .daily{padding:var(--space-4) var(--space-5);border-radius:var(--radius-md);
+    background:var(--surface);border:1px solid var(--line);text-align:left}
+  .daily .eyebrow{font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 var(--space-2)}
+  .daily-text{font-family:var(--font-display);font-style:italic;font-weight:400;font-size:15.5px;
+    line-height:1.6;margin:0;max-width:none;
+    /* Clipped rather than allowed to run the rail off the screen. */
+    display:-webkit-box;-webkit-line-clamp:10;-webkit-box-orient:vertical;overflow:hidden}
+  .daily-cite{display:block;margin-top:var(--space-3);font-size:11.5px;color:var(--ink-faint);font-weight:500}
+
+  /* ============================= worth knowing ============================= */
+  /* Shown before anybody asks anything. The page used to offer a visitor an
+     empty box and little else; this gives somebody who does not yet know
+     what to ask something to read. Hidden once a search runs, because then
+     the answers are the point. */
+  .known{margin-top:var(--space-12);text-align:left}
+  .known-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-4);
+    padding-bottom:var(--space-3);border-bottom:1px solid var(--line);margin-bottom:var(--space-2)}
+  .known-head h2{font-family:var(--font-sans);font-size:12px;font-weight:600;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-faint);margin:0}
+  .known-head span{font-size:12.5px;color:var(--ink-faint)}
+  .known-item{border-bottom:1px solid var(--line)}
+  .known-btn{display:flex;align-items:center;gap:var(--space-3);width:100%;text-align:left;
+    background:none;border:0;padding:var(--space-4) 0;color:var(--ink);
+    font:500 15.5px/1.4 var(--font-sans);transition:color var(--dur-fast) var(--ease)}
+  .known-btn:hover{color:var(--accent)}
+  .known-btn .chev{margin-left:auto;flex:none;width:15px;height:15px;color:var(--ink-faint);
+    transition:transform var(--dur) var(--ease)}
+  .known-item.open .known-btn{color:var(--accent)}
+  .known-item.open .chev{transform:rotate(90deg)}
+  .known-body{display:none;padding:0 0 var(--space-5)}
+  .known-item.open .known-body{display:block;animation:rise .45s var(--ease) both}
+  .known-text{font-family:var(--font-display);font-size:18.5px;line-height:1.65;margin:0 0 var(--space-3)}
+  .known-foot{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+  .known-cite{font-size:12.5px;font-weight:600;color:var(--accent)}
+  body.has-results .known{display:none}
 
   /* ============================= notice ============================= */
   .notice{max-width:var(--measure);margin:var(--space-8) auto 0;display:flex;gap:var(--space-3);align-items:flex-start;
@@ -358,7 +432,13 @@
   </div>
 </div>
 
-<main class="hero">
+<main class="page">
+  <nav class="rail rail-left topics-section enter" aria-label="Browse by topic" style="animation-delay:260ms">
+    <div class="topics-head"><h2>Topics</h2></div>
+    <div class="topics" id="topics"></div>
+  </nav>
+
+  <div class="center">
   <p class="kicker enter" style="animation-delay:40ms">Four authenticated collections</p>
   <h1 class="enter" style="animation-delay:90ms">Ask, and find<br><em>what was said.</em></h1>
   <p class="lede enter" style="animation-delay:150ms">Every answer is a real hadith with its reference,
@@ -382,16 +462,14 @@
     </div>
   </div>
 
-  <section class="daily enter" id="daily" style="animation-delay:260ms"></section>
-
-  <nav class="topics-section enter" aria-label="Browse by topic" style="animation-delay:300ms">
-    <div class="topics-head"><h2>Browse by topic</h2></div>
-    <div class="topics" id="topics"></div>
-  </nav>
-
   <div id="notice-slot"></div>
-
   <section class="results" id="out" aria-live="polite"></section>
+  <section class="known enter" id="known" style="animation-delay:340ms" hidden></section>
+  </div>
+
+  <aside class="rail rail-right enter" aria-label="Hadith of the day" style="animation-delay:300ms">
+    <section class="daily" id="daily"></section>
+  </aside>
 </main>
 
 <footer>
@@ -563,6 +641,39 @@ async function openTopic(name, more){
     const mb=document.getElementById('more-topic'); if(mb) mb.onclick=()=>openTopic(name,true);
   }catch(e){ out.innerHTML='<div class="status">Could not load that topic.</div>'; }
 }
+
+/* Hadith worth knowing. A fixed list from the server, each one openable in
+   place -- titles alone would be a list of claims, and the whole point of
+   this app is that you read the words and their reference. */
+const knownEl=document.getElementById('known');
+(async ()=>{
+  try{
+    const d=await (await fetch('/api/featured')).json();
+    if(!d.results || !d.results.length) return;
+    knownEl.innerHTML=`<div class="known-head"><h2>Hadith worth knowing</h2>
+        <span>${d.results.length} to read</span></div>`+
+      d.results.map((h,i)=>`<div class="known-item" data-id="${esc(h.id)}">
+        <button type="button" class="known-btn" aria-expanded="false">
+          ${esc(h.label||'')}
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="known-body">
+          <p class="known-text">${esc(h.text)}</p>
+          <div class="known-foot">
+            <span class="known-cite">${esc(h.citation)}</span>
+            ${h.grade?`<span class="badge badge-grade${/differ/.test(h.grade)?' differs':''}">${esc(h.grade)}</span>`:''}
+          </div>
+        </div>
+      </div>`).join('');
+    knownEl.hidden=false;
+    knownEl.querySelectorAll('.known-btn').forEach(b=>b.onclick=()=>{
+      const item=b.closest('.known-item'), open=item.classList.toggle('open');
+      b.setAttribute('aria-expanded', String(open));
+    });
+  }catch(e){}
+})();
 
 const dailyEl=document.getElementById('daily');
 let supportInfo=null;

@@ -50,6 +50,7 @@ import analytics                                                # noqa: E402
 import google_auth                                              # noqa: E402
 import usage_cap                                                # noqa: E402
 import topics as topics_mod                                     # noqa: E402
+import featured as featured_mod                                 # noqa: E402
 from durable_store import DurableStore, ensure_repo             # noqa: E402
 
 FEEDBACK_PATH = os.path.join(PROJECT_DIR, "data", "feedback.jsonl")
@@ -149,6 +150,7 @@ def startup():
         corpus = json.load(f)
     STATE["store"] = HybridStore(corpus, expansions=load_expansions())
     STATE["topics"] = topics_mod.build_index(STATE["store"].hadiths)
+    STATE["featured"] = featured_mod.build(STATE["store"].hadiths)
     STATE["client"] = None
     if USE_RELEVANCE_CHECK:
         try:
@@ -436,6 +438,7 @@ def health():
         "feedback_storage": _storage_summary(
             STATE["feedback"].status() if STATE.get("feedback") else None),
         "events_storage": _storage_summary(analytics.status()),
+        "featured": len(STATE.get("featured") or []),
         "picks_storage": _storage_summary(
             STATE["picks"].status() if STATE.get("picks") else None),
     }
@@ -464,6 +467,23 @@ def topic(name: str, limit: int = 8, offset: int = 0):
         "total": len(hits),
         "offset": offset,
         "results": [_payload(h, 1.0) for h in window],
+    }
+
+
+@app.get("/api/featured")
+def featured():
+    """
+    Hadith worth knowing, for somebody who has not thought of a question yet.
+
+    A fixed hand-checked list read straight from the corpus -- nothing is
+    retrieved, ranked or generated here, and each entry carries the same
+    citation and grading as any search result. See featured.py for how the
+    list was chosen and what was deliberately left out of it.
+    """
+    items = STATE.get("featured") or []
+    return {
+        "count": len(items),
+        "results": [dict(_payload(h, 1.0), label=label) for h, label in items],
     }
 
 
