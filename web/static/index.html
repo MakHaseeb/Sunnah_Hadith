@@ -131,7 +131,14 @@
   /* ============================= chrome ============================= */
   .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;
     padding:var(--space-5) var(--space-6);max-width:1040px;margin:0 auto}
-  .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-size:18px;font-weight:560;letter-spacing:.01em}
+  /* A button, not a heading: it is the way back to the home state, and the
+     one thing everybody tries first when they want to start over. */
+  .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-size:18px;
+    font-weight:560;letter-spacing:.01em;background:none;border:0;padding:0;color:var(--ink);
+    transition:opacity var(--dur-fast) var(--ease)}
+  .brand:hover{opacity:.72}
+  .brand-mark{transition:transform var(--dur) var(--ease)}
+  .brand:hover .brand-mark{transform:rotate(135deg)}
   .brand-mark{width:9px;height:9px;border-radius:2px;background:var(--accent);transform:rotate(45deg);flex:none}
   .topbar-actions{display:flex;align-items:center;gap:var(--space-2)}
 
@@ -291,7 +298,11 @@
   .known-text{font-family:var(--font-display);font-size:18.5px;line-height:1.65;margin:0 0 var(--space-3)}
   .known-foot{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
   .known-cite{font-size:12.5px;font-weight:600;color:var(--accent)}
-  body.has-results .known{display:none}
+  /* Deliberately NOT hidden once a search runs. It was, on the reasoning
+     that answers are the point then -- but a reader who has just read one
+     hadith is exactly the reader most likely to want another, and the
+     section costs nothing where it sits, below the results. */
+  .known{margin-top:var(--space-12)}
 
   /* ============================= notice ============================= */
   .notice{max-width:var(--measure);margin:var(--space-8) auto 0;display:flex;gap:var(--space-3);align-items:flex-start;
@@ -415,7 +426,8 @@
 <div id="bg-grain" aria-hidden="true"></div>
 
 <div class="topbar enter" style="animation-delay:0ms">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Hadith Search</div>
+  <button type="button" class="brand" id="btn-home" aria-label="Back to the start">
+    <span class="brand-mark" aria-hidden="true"></span>Hadith Search</button>
   <div class="topbar-actions">
     <div class="theme-switch" id="theme-switch" role="group" aria-label="Theme">
       <div class="thumb" id="theme-thumb" aria-hidden="true"></div>
@@ -773,6 +785,24 @@ document.getElementById('btn-support').onclick=()=>{
     <a class="btn btn-primary" style="text-decoration:none;width:100%" href="${esc(supportInfo.url)}" target="_blank"
        rel="noopener noreferrer" onclick="track('support_click')">Give a gift</a>
     <p class="modal-note">Opens in a new tab. We never see your payment details.</p>`);
+};
+
+/* Back to the state the page loads in: no query, no results, no topic
+   selected. Everything the visitor typed is cleared, because "home" that
+   leaves your last search sitting in the box is not home. */
+document.getElementById('btn-home').onclick=()=>{
+  qEl.value=''; lastQuestion=''; shownIds=[];
+  out.innerHTML=''; document.getElementById('notice-slot').innerHTML='';
+  markTopic(null); setResults(false); topicOffset=0;
+  // The rail keeps its own scroll position, so "back to the start" has to
+  // put that back too or the topic list is still mid-way down.
+  topicsEl.scrollTop=0;
+  knownEl.querySelectorAll('.known-item.open').forEach(i=>{
+    i.classList.remove('open');
+    i.querySelector('.known-btn').setAttribute('aria-expanded','false');
+  });
+  scrollTo({top:0, behavior: reduceMotion ? 'auto' : 'smooth'});
+  qEl.focus({preventScroll:true});
 };
 
 document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
