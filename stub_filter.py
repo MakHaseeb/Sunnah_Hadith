@@ -42,7 +42,10 @@ import re
 # Harb, Waki, Ishaq b. Mansur" through, because it merely LISTS narrators.
 # A real hadith never opens by naming itself.
 _STUB_OPENING = re.compile(
-    r"^(this|that|the same|the above|the aforesaid|a similar) (hadith|hadeeth|tradition)\b",
+    r"^(this|that|the same|the above|the aforesaid|a similar) (hadith|hadeeth|tradition)\b"
+    # A record that is nothing but a pointer at the chain apparatus:
+    # "narration about the chain of narrators".
+    r"|^(the )?narration (about|regarding|concerning) the (chain|isnad|narrator)",
     re.I,
 )
 
@@ -97,12 +100,102 @@ _CROSSREF = re.compile(
 MIN_CONTENT_WORDS = 4
 
 
+# A pure chain note ENDS with the transmission phrase -- that is the whole
+# record. A real hadith that mentions its chain carries on and says
+# something afterwards.
+#
+# An earlier attempt asked instead whether a COLON introduced content. It
+# looked right on the handful of cases it was written against, then
+# excluded 148 records of which most were real: "Nafi' reported on the
+# authority of Ibn Umar THAT Allah's Messenger used to..." delivers its
+# ruling with "that", not a colon. Caught by reading every newly-excluded
+# record -- the only method that has ever worked on this filter.
+_CHAIN_TAIL = re.compile(
+    r"(?:"
+    r"(?:with|through|on|by)\s+(?:the\s+|a\s+)?(?:same|another|different|"
+    r"slightly\s+different)\s+(?:chain|authorit\w*|isnad|version)\w*"
+    r"|chains?\s+of\s+(?:transmitters?|narrators?)"
+    r"|(?:the\s+)?same\s+authorit\w*"
+    r"|other\s+(?:traditions?|transmitters?|narrators?)"
+    r")"
+    # Nothing of substance after it -- at most a short trailing clause such
+    # as "(Allah be pleased with him)" or a stray name.
+    r"[\s\S]{0,45}$",
+    re.I,
+)
+
+# Something the record actually ASSERTS, as opposed to who passed it on.
+_HAS_CONTENT = re.compile(
+    r"\bthat\b\s+\S+(?:\s+\S+){3,}"
+    r"|:\s*\S+(?:\s+\S+){2,}"
+    r"|[\"\u201c][^\"\u201d]{15,}"
+    r"|\b(said|saying|observed|forbade|prohibited|commanded|ordered|"
+    r"used\s+to|asked|replied|cursing|invoked)\b",
+    re.I,
+)
+
+_NARRATION_VERB = re.compile(
+    r"\b(narrated|reported|transmitted|related)\b", re.I)
+
+
+# Records that open by describing another hadith: "A hadith like this has
+# been transmitted by Hisham". Deliberately NOT part of _STUB_OPENING --
+# it must stay behind the content check, because "A hadith has been
+# narrated by Mus'ab b. Sa'd ... as saying:My father took a sword" opens
+# the same way and then delivers the whole report.
+_REFERS_TO_ANOTHER = re.compile(
+    r"^(a|the|this|that|these)\s+(hadith|hadeeth|ahadith|tradition)s?\b"
+    r"[\s\S]{0,60}?\b(like|similar|has|have|is|was)\b",
+    re.I,
+)
+
+# How much may precede the chain phrase before the record is carrying
+# content rather than bookkeeping.
+_MAX_PREFIX_WORDS = 16
+
+
+def _chain_note_only(text):
+    """
+    True when the whole record is a note about who transmitted something.
+
+    Three ways this has been got wrong, each found by reading output:
+
+      * Requiring a COLON to signal content excluded 148 real records --
+        most hadith deliver their ruling with "that", not a colon.
+      * Matching the chain phrase anywhere excluded famous hadith that
+        simply mention their chain at the END: "Allah is more pleased with
+        the repentance of His servant ... [through another chain]". So the
+        text BEFORE the chain phrase must be short and unbroken by a full
+        stop -- a completed sentence there means the record already said
+        something. The full-stop test ignores the abbreviated patronymic
+        "b." (ibn), which is the character-class trap from iteration (3).
+      * Putting "A hadith like this..." in the opening patterns bypassed
+        the content check, excluding records that open that way and then
+        quote the report in full.
+    """
+    if not _NARRATION_VERB.search(text):
+        return False
+    if _HAS_CONTENT.search(text):
+        return False
+    if _REFERS_TO_ANOTHER.match(text):
+        return True
+    m = _CHAIN_TAIL.search(text)
+    if not m:
+        return False
+    prefix = text[:m.start()]
+    if len(prefix.split()) > _MAX_PREFIX_WORDS:
+        return False
+    prefix = re.sub(r"\b[a-z]\.", "", prefix, flags=re.I)
+    return "." not in prefix
+
+
 def is_stub(record):
     text = " ".join(str(record.get("text", "")).split())
     if len(text.split()) < MIN_CONTENT_WORDS:
         return True
     return bool(_STUB_OPENING.match(text) or _STUB.match(text)
-                or _STUB_NAMED.match(text) or _CROSSREF.match(text))
+                or _STUB_NAMED.match(text) or _CROSSREF.match(text)
+                or _chain_note_only(text))
 
 
 def split_indexable(corpus):

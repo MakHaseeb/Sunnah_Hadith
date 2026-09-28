@@ -1,12 +1,12 @@
 {
-  "created": "2026-09-23T10:57:38Z",
+  "created": "2026-09-28T02:44:15Z",
   "model": "multi-qa-MiniLM-L6-cos-v1",
-  "hadith": 20993,
-  "chunks": 184557,
+  "hadith": 20932,
+  "chunks": 184159,
   "corpus_file": "corpus.json",
   "corpus_sha256": "7e00f7a853609fc368b55e8d7cedd79a0ff7eeefe6df1a713218b0257de68703",
   "corpus_bytes": 23289577,
-  "embedding_file": "emb_0d204de71a82ae7c.npy",
-  "embedding_sha256": "cde8d8bf47e3db2a32dad7f8b9dc8e3c6c67a55f28d43288a360185a8f87443f",
-  "embedding_bytes": 283479680
+  "embedding_file": "emb_fc18cebc98532e36.npy",
+  "embedding_sha256": "0b7fd42593ed7fd6ce446415cdc7ce8e01fbaaf943349fcd89f1ff9b37c305ce",
+  "embedding_bytes": 282868352
 }

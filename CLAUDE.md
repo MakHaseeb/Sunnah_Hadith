@@ -228,6 +228,30 @@ The real hazard is not downtime but a **half-updated state** -- some queries hit
 
     Kept in its own file (`picks.jsonl`) rather than mixed into feedback: a report says "this is wrong", a pick says "this was right". Only the second is ground truth.
 
+33. **The topic browser was showing fragments, and "shortest first" was the cause.** Haseeb reported that clicking Faith opened with "he saw Allah with his heart" and "He who took up arms against us is not of us", and asked whether the section should be removed. Both records really are filed under Faith by the collectors -- the grouping was never wrong. The ordering was: `sorted(hits, key=len)` put the shortest first, on the reasoning that a browser wants something readable at a glance. **The shortest records are the ones with the least context**, so it reliably surfaced the most confusing ones. Reading the output revealed three distinct defects behind one complaint:
+
+    - **Chain-of-transmission stubs had leaked back into the index** and were sitting at the top of topics *and* in search. 61 of them, e.g. "Abu Bakr b. Abi Shaiba narrated it on the same authorities". Two causes: the translators' word "tradition" was missing from the corroborating-word list, so `muslim:205` slipped through; and `_STUB_NAMED` required "narrated **the hadith**" while these say "narrated **it**".
+    - **401 exact duplicate texts**, so "He who took up arms against us is not of us" appeared twice in a row.
+    - The ordering above.
+
+    **Semantic ranking was tried for the ordering and was WORSE.** Ranking a topic's members by similarity to a query like "what does it mean to have faith in Allah" put a chain note third at 0.758 -- because doc2query gave stubs generated questions too. That is bug #23(a) arriving from a new direction, and it is the second time stubs have beaten real hadith on a semantic score.
+
+    What is used instead is deliberately dull: prefer hadith whose own text uses the subject's vocabulary, and that are 20-120 words. Explainable to a reader, which matters more here than an ordering nobody can account for.
+
+    **The keyword signal had to be weighted BELOW the length band.** Scoring topicality first reproduced bug #17 in a new place: a 487-word narration trivially contains more keyword matches than a 45-word ruling, so the longest records took every top slot. "Of the hadith that are a sensible length, show the ones most clearly about the subject" is both better and easier to defend.
+
+    **Verdict on the section: keep it.** Browsing is the only part of the app that costs nothing to run -- no API call -- and it is the one path for somebody who does not yet know what to ask.
+
+34. **The stub filter regressed because its regression guard was never a file.** Bug #25 records "a 26-record regression guard of known-real hadith" -- which lived only in that session and was gone when the filter was next touched. `test_stub_filter.py` now exists, with every record read individually before being listed, and the near-miss pairs that make the rule hard stated explicitly.
+
+    Fixing it took **three attempts, each caught by reading every newly-excluded record rather than by any metric** -- the same method, and the same number of iterations, as the original bug:
+
+    1. Requiring a COLON to signal content excluded **148 records, most of them real**: "Nafi' reported on the authority of Ibn Umar THAT Allah's Messenger used to..." delivers its ruling with "that", not a colon.
+    2. Matching the chain phrase anywhere excluded famous hadith that merely mention their chain at the END -- "Allah is more pleased with the repentance of His servant..." and "O Allah, grant forgiveness to the Ansar...". Fixed by requiring the text before the chain phrase to be short and unbroken by a full stop, ignoring the "b." (ibn) abbreviation that is the character-class trap from iteration (3) of bug #25.
+    3. Putting "A hadith like this..." among the opening patterns bypassed the content check, excluding records that open that way and then quote the report in full.
+
+    Final: 61 excluded, **0 real hadith lost**, every one read. The guard's value is not the six records it lists but the pairs it encodes -- `muslim:438` ("Abu Bakr b. Abi Shaiba narrated it on the same authorities", a stub) against `muslim:230` ("Jarir b. Abdullah reported it from the Holy Prophet:When the slave runs away from his master, his prayer is not accepted", real). Identical openings, opposite verdicts. No wording rule alone can separate them.
+
 ## Research findings incorporated into the plan
 
 - Even paid, professional legal-AI products (LexisNexis's Lexis+ AI, Thomson Reuters's Westlaw AI) hallucinate an estimated **17–33% of the time** despite using RAG, per a 2025 Stanford study — useful for calibrating expectations. This is a genuinely hard, industry-wide unsolved problem, not a sign of doing something wrong.

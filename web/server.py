@@ -449,13 +449,16 @@ def list_topics():
 
 @app.get("/api/topic")
 def topic(name: str, limit: int = 8, offset: int = 0):
-    """Hadith within one topic. Shortest first, so browsing starts with
-    the ones that can be read at a glance rather than a wall of text."""
+    """
+    Hadith within one topic, already ordered and deduplicated by
+    topics.build_index -- see the note there on why "shortest first" was
+    wrong. The ordering is computed once at startup rather than per
+    request, because it depends only on the corpus.
+    """
     hits = STATE["topics"].get(name)
     if hits is None:
         raise HTTPException(status_code=404, detail="Unknown topic.")
-    ordered = sorted(hits, key=lambda h: len(h["text"].split()))
-    window = ordered[offset:offset + max(1, min(limit, 20))]
+    window = hits[offset:offset + max(1, min(limit, 20))]
     return {
         "name": name,
         "total": len(hits),
