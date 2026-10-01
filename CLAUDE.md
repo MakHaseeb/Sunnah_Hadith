@@ -262,6 +262,27 @@ The real hazard is not downtime but a **half-updated state** -- some queries hit
 
     Worth keeping: the rails are `position:sticky` with a `clamp()` top margin, so the head start costs one screen and nothing after it. The day's hadith no longer has to be hidden when a search runs -- in its own column it blocks nothing, which is the point of having margins to use.
 
+37. **A JSON parse failure was being shown to users as "No clear answer found" -- a confident refusal manufactured by a bug, about questions the model had answered correctly.** Found while trialling Groq, but it was never provider-specific. `_parse` tried `json.loads` and, on failure, returned every verdict as False. The page renders that as "No clear answer found. Try rephrasing it." So the user is told no hadith addresses their question when in truth the model said six did and we could not read the reply.
+
+    The real output that exposed it, qwen on Groq:
+
+        {"n": 1, "answers": true, "Specifies exact words to say entering toilet."}
+
+    The verdict is perfectly legible -- only the `"why"` KEY NAME is missing. Six of ten hadith were correctly judged to answer "what to say when entering the toilet", matching Haiku exactly, and all six were discarded.
+
+    Fixed two ways, and the second matters more than the first. A per-object fallback reads `n` and `answers` directly when strict JSON fails, treating the explanation as optional -- the fields that decide anything are the index and the boolean. And a parse failure now raises `Unparseable`, which the caller converts to `Unavailable`: the app degrades to plain search and says so, instead of asserting a refusal. **"The model said no" and "we could not read the model" must never produce the same output**, which is the same principle `Unavailable` already encoded for a failed call -- it just had a hole in it.
+
+38. **Groq's free tier works and is genuinely free, but the binding limit is tokens per minute, not requests per day.** Measured from the response headers: 1,000 requests/day, **8,000 tokens/minute**. At ~1,250 tokens per search that is **~6 searches per minute** -- fine for a trial, not for a launch.
+
+    Two findings worth keeping:
+
+    - **The catalogue moved under us.** `llama-3.3-70b-versatile`, the model every 2026 pricing article names, returns 404 on Groq today. The lineup is now gpt-oss, qwen and whisper. Ask `GET /openai/v1/models` rather than trusting a model name from a blog.
+    - **gpt-oss models are reasoning models and the reasoning eats the token budget.** They spend output tokens thinking, in a separate `reasoning` field that does not count as content, so `max_tokens=600` returned EMPTY content -- indistinguishable from a model that said nothing. ~990 output tokens per search against Haiku's ~290, which is what made 8,000 TPM bite after five searches.
+
+    **Quality, honestly: close but noisier.** Against the ten questions Haiku was measured on, qwen matched the keep-count exactly 6/10 and agreed on the top result for 5. It correctly rejected an out-of-domain query. But it kept all ten for "is music allowed" where Haiku kept seven, and kept none for "benefits of cutting nails" where Haiku kept four. Less consistent in both directions.
+
+    This is a WEAK comparison and should be labelled as such: the Anthropic side could not be run live because the balance was exhausted, so Haiku's numbers are recorded from an earlier session rather than measured side by side. Re-run `compare_providers.py` with both keys funded before treating the quality question as settled.
+
 ## Research findings incorporated into the plan
 
 - Even paid, professional legal-AI products (LexisNexis's Lexis+ AI, Thomson Reuters's Westlaw AI) hallucinate an estimated **17–33% of the time** despite using RAG, per a 2025 Stanford study — useful for calibrating expectations. This is a genuinely hard, industry-wide unsolved problem, not a sign of doing something wrong.

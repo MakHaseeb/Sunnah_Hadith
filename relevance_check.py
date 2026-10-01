@@ -54,7 +54,9 @@ hadith would consider their question answered.
 {candidates}
 
 Return ONLY a JSON array, one object per hadith, in order:
-[{{"n": 1, "answers": true|false, "why": "<8 words max>"}}, ...]"""
+[{{"n": 1, "answers": true|false, "why": "<8 words max>"}}, ...]
+
+Every object must have all three keys, named exactly n, answers and why."""
 
 
 def build_prompt(question, candidates):
@@ -66,27 +68,89 @@ def build_prompt(question, candidates):
                          candidates="\n\n".join(blocks))
 
 
+class Unparseable(Exception):
+    """The model answered but we could not read it.
+
+    Treated like Unavailable, never like "no". A parse failure used to fall
+    through to every verdict being False, which the page then showed as "No
+    clear answer found" -- a confident refusal produced by a bug, about a
+    question the model had in fact answered correctly. That is the exact
+    failure shape this project keeps meeting: something that keeps working
+    while being wrong.
+    """
+
+
+# Per-object fallback. Models drift on JSON in small ways -- a missing key
+# name, a trailing comma, a stray fence -- and the drift is not worth
+# punishing a user for. Real observed failure, qwen on Groq:
+#
+#   {"n": 1, "answers": true, "Specifies exact words to say entering toilet."}
+#
+# The verdict is perfectly legible; only the "why" key name is missing. The
+# fields that MATTER are the index and the boolean, so they are read
+# directly and the explanation is treated as optional.
+_OBJ = re.compile(r"\{[^{}]*\}", re.S)
+_N = re.compile(r'"n"\s*:\s*(\d+)')
+_ANS = re.compile(r'"answers"\s*:\s*(true|false)', re.I)
+_WHY = re.compile(r'"why"\s*:\s*"([^"]*)"')
+# The explanation when the key name was dropped: the last bare string.
+_BARE = re.compile(r'"([^"]{4,})"\s*\}?\s*$')
+
+
 def _parse(raw, n):
-    raw = raw.strip()
+    """
+    Returns verdicts aligned to the candidates.
+
+    Raises Unparseable if NOTHING could be read -- the caller must be able
+    to tell "the model said no" from "we could not read the model".
+    """
+    raw = (raw or "").strip()
     fence = re.search(r"```(?:json)?\s*(.+?)```", raw, re.S)
     if fence:
         raw = fence.group(1).strip()
+    verdicts = [{"answers": False, "why": ""} for _ in range(n)]
+
     start, end = raw.find("["), raw.rfind("]")
-    verdicts = [{"answers": False, "why": "unparsed"} for _ in range(n)]
-    if start == -1 or end <= start:
-        return verdicts
-    try:
-        items = json.loads(raw[start:end + 1])
-    except json.JSONDecodeError:
-        return verdicts
-    for item in items:
+    items = None
+    if start != -1 and end > start:
         try:
-            idx = int(item.get("n", 0)) - 1
-        except (TypeError, ValueError):
+            items = json.loads(raw[start:end + 1])
+        except json.JSONDecodeError:
+            items = None
+
+    if items is not None:
+        seen = False
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            try:
+                idx = int(item.get("n", 0)) - 1
+            except (TypeError, ValueError):
+                continue
+            if 0 <= idx < n:
+                verdicts[idx] = {"answers": bool(item.get("answers")),
+                                 "why": str(item.get("why", ""))[:60]}
+                seen = True
+        if seen:
+            return verdicts
+
+    # Strict JSON failed or yielded nothing usable -- read object by object.
+    seen = False
+    for block in _OBJ.findall(raw):
+        mn, ma = _N.search(block), _ANS.search(block)
+        if not (mn and ma):
             continue
-        if 0 <= idx < n:
-            verdicts[idx] = {"answers": bool(item.get("answers")),
-                             "why": str(item.get("why", ""))[:60]}
+        idx = int(mn.group(1)) - 1
+        if not (0 <= idx < n):
+            continue
+        why = _WHY.search(block)
+        if not why:
+            why = _BARE.search(block.rstrip().rstrip("}").rstrip())
+        verdicts[idx] = {"answers": ma.group(1).lower() == "true",
+                         "why": (why.group(1)[:60] if why else "")}
+        seen = True
+    if not seen:
+        raise Unparseable(f"no verdicts readable from {len(raw)} chars")
     return verdicts
 
 
@@ -109,7 +173,10 @@ def _parse(raw, n):
 # compare_providers.py exists for exactly that.
 # ---------------------------------------------------------------------------
 
-GROQ_MODEL = os.environ.get("HADITH_GROQ_MODEL", "llama-3.3-70b-versatile")
+# Groq's catalogue moves: the Llama 3.x ids this was first written against
+# were already gone by the time it ran. Ask the API what it serves
+# (GET /openai/v1/models) rather than trusting a model name from a blog.
+GROQ_MODEL = os.environ.get("HADITH_GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
@@ -161,6 +228,12 @@ class GroqClient:
         self._http = httpx.Client(timeout=60.0)
 
     def complete(self, prompt, max_tokens=600):
+        # gpt-oss and qwen on Groq are REASONING models: they spend output
+        # tokens thinking before the answer, and the thinking lands in a
+        # separate "reasoning" field that does not count toward content. At
+        # 600 the budget can be gone before the JSON starts, which looks
+        # exactly like a model that returned nothing. Give it room.
+        max_tokens = max(max_tokens, 2000)
         r = self._http.post(
             GROQ_URL,
             headers={"Authorization": f"Bearer {self._key}",
@@ -227,7 +300,11 @@ def check(question, candidates, client=None, model=MODEL):
         raise Unavailable(str(e)) from e
     if text is None:                      # the model declined to answer
         return [{"answers": False, "why": "refused"} for _ in candidates], usage
-    return _parse(text, len(candidates)), usage
+    try:
+        return _parse(text, len(candidates)), usage
+    except Unparseable as e:
+        # Degrade to plain search rather than claim nothing answers it.
+        raise Unavailable(f"could not read the model's reply: {e}") from e
 
 
 def filter_relevant(question, retrieved, client=None, model=MODEL, k=SHORTLIST):
