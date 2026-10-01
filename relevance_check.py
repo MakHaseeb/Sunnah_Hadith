@@ -90,13 +90,116 @@ def _parse(raw, n):
     return verdicts
 
 
-def make_client():
-    import anthropic
+# ---------------------------------------------------------------------------
+# Providers
+#
+# The relevance check is one small, well-defined judgement -- "does this
+# passage answer this question" -- repeated once per search. That makes it
+# the one place in this app where the model is genuinely swappable, and
+# worth keeping swappable: it is also the only recurring cost.
+#
+# Groq is here because its free tier needs no credit card. For a personal
+# project with no budget that is not a marginal saving, it is the
+# difference between the relevance check running and not running -- and
+# with it switched off the app drops from roughly 80% to 25% correct.
+#
+# WHAT IS NOT ASSUMED: that a smaller model does this job as well. The
+# check is the single change that produced that 80%, so a provider swap
+# has to be MEASURED against the evaluation harness before it is trusted.
+# compare_providers.py exists for exactly that.
+# ---------------------------------------------------------------------------
+
+GROQ_MODEL = os.environ.get("HADITH_GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+
+class _Usage:
+    """Mimics the field names the Anthropic SDK returns, so callers that
+    log token counts do not have to care which provider answered."""
+
+    def __init__(self, input_tokens=0, output_tokens=0):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+
+class AnthropicClient:
+    name = "anthropic"
+
+    def __init__(self, model=None):
+        import anthropic
+        self.model = model or MODEL
+        self._c = anthropic.Anthropic()
+
+    def complete(self, prompt, max_tokens=600):
+        kwargs = dict(model=self.model, max_tokens=max_tokens,
+                      messages=[{"role": "user", "content": prompt}])
+        if self.model.startswith("claude-opus") or self.model.startswith("claude-sonnet-5"):
+            kwargs["thinking"] = {"type": "adaptive"}
+            kwargs["output_config"] = {"effort": "low"}
+        resp = self._c.messages.create(**kwargs)
+        if resp.stop_reason == "refusal":
+            return None, resp.usage
+        text = "".join(b.text for b in resp.content if b.type == "text")
+        return text, resp.usage
+
+
+class GroqClient:
+    """
+    Groq's OpenAI-compatible endpoint, called over plain HTTP.
+
+    No SDK on purpose: this is one POST with a JSON body, and adding a
+    dependency to a container that already ships 300 MB of vectors to save
+    ten lines is a poor trade.
+    """
+
+    name = "groq"
+
+    def __init__(self, model=None):
+        import httpx
+        self.model = model or GROQ_MODEL
+        self._key = os.environ.get("GROQ_API_KEY", "").strip()
+        self._http = httpx.Client(timeout=60.0)
+
+    def complete(self, prompt, max_tokens=600):
+        r = self._http.post(
+            GROQ_URL,
+            headers={"Authorization": f"Bearer {self._key}",
+                     "Content-Type": "application/json"},
+            json={"model": self.model, "max_tokens": max_tokens,
+                  "temperature": 0,
+                  "messages": [{"role": "user", "content": prompt}]},
+        )
+        if r.status_code != 200:
+            raise RuntimeError(f"groq {r.status_code}: {r.text[:200]}")
+        d = r.json()
+        u = d.get("usage") or {}
+        return (d["choices"][0]["message"]["content"],
+                _Usage(u.get("prompt_tokens", 0), u.get("completion_tokens", 0)))
+
+
+def make_client(provider=None, model=None):
+    """
+    Pick a provider. Explicit argument wins, then HADITH_LLM_PROVIDER, then
+    whichever key is actually present -- so a key running out does not have
+    to mean editing config to fall back to the other one.
+    """
     from env_config import load_env
     load_env()
-    if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
-        raise SystemExit("No API credentials. See .env.example")
-    return anthropic.Anthropic()
+    provider = (provider or os.environ.get("HADITH_LLM_PROVIDER", "")).strip().lower()
+    has_anthropic = bool(os.environ.get("ANTHROPIC_API_KEY")
+                         or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
+    has_groq = bool(os.environ.get("GROQ_API_KEY"))
+    if not provider:
+        provider = "anthropic" if has_anthropic else ("groq" if has_groq else "")
+    if provider == "groq":
+        if not has_groq:
+            raise SystemExit("HADITH_LLM_PROVIDER=groq but GROQ_API_KEY is not set.")
+        return GroqClient(model)
+    if provider == "anthropic":
+        if not has_anthropic:
+            raise SystemExit("HADITH_LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set.")
+        return AnthropicClient(model)
+    raise SystemExit("No API credentials. Set ANTHROPIC_API_KEY or GROQ_API_KEY — see .env.example")
 
 
 class Unavailable(Exception):
@@ -118,20 +221,13 @@ def check(question, candidates, client=None, model=MODEL):
     if not candidates:
         return [], None
     client = client or make_client()
-    kwargs = dict(model=model, max_tokens=600,
-                  messages=[{"role": "user",
-                             "content": build_prompt(question, candidates)}])
-    if model.startswith("claude-opus") or model.startswith("claude-sonnet-5"):
-        kwargs["thinking"] = {"type": "adaptive"}
-        kwargs["output_config"] = {"effort": "low"}
     try:
-        resp = client.messages.create(**kwargs)
+        text, usage = client.complete(build_prompt(question, candidates))
     except Exception as e:
         raise Unavailable(str(e)) from e
-    if resp.stop_reason == "refusal":
-        return [{"answers": False, "why": "refused"} for _ in candidates], resp.usage
-    text = "".join(b.text for b in resp.content if b.type == "text")
-    return _parse(text, len(candidates)), resp.usage
+    if text is None:                      # the model declined to answer
+        return [{"answers": False, "why": "refused"} for _ in candidates], usage
+    return _parse(text, len(candidates)), usage
 
 
 def filter_relevant(question, retrieved, client=None, model=MODEL, k=SHORTLIST):
